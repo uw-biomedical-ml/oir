@@ -1,0 +1,15 @@
+.buildpath
+.project
+.settings/
+data/
+plot/
+checkpoint/
+*.txt
+*.log
+*.swp
+all-exp-code/
+output/
+backup/
+tmp/
+retina/
+*.png
