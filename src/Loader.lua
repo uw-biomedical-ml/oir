@@ -25,12 +25,8 @@ end
 
 local function getRawFilePath(labeledFile)
   local qStart = string.find(labeledFile, "quantified")
-  local rawFile = nil
-  if string.sub(qStart-1, qStart-1) ~= " " then
-    rawFile = string.sub(labeledFile,1,qStart-1) .. ".tif"
-  else
-    rawFile = string.sub(labeledFile,1,qStart-2) .. ".tif"
-  end
+  local rawFile = string.sub(labeledFile,1,qStart-1)
+  rawFile = string.gsub(rawFile, "%s$", "") .. ".tif"
   return rawFile
 end
 
@@ -41,7 +37,7 @@ local function retrieveAndSaveAllPaths(dir)
       local labeled = {}
       getAllPaths(dir, labeled)
       cleanedLabeled = {}
-      for file in labeled do
+      for _, file in pairs(labeled) do
         local rawFile = getRawFilePath(file)
         if paths.filep(rawFile) then
           table.insert(cleanedLabeled, file)
@@ -51,14 +47,22 @@ local function retrieveAndSaveAllPaths(dir)
   else
     cleanedLabeled = torch.load(pathsFile)
   end
+  return cleanedLabeled
 end
 
 function Loader.create(opt)
   local self = {}
   setmetatable(self, Loader)
-  
+  self.batchSize = opt.batchSize
+  self.patchSize = opt.patchSize
+  local spacing = opt.spacing
+  if not spacing or spacing < 0 then
+    spacing = opt.patchSize
+  end
+  self.spacing = spacing  
+ 
   local allPaths = retrieveAndSaveAllPaths(opt.dir)
-  local trainSize = #allPaths * opt.trainSize
+  local trainSize = table.getn(allPaths) * opt.trainSize
   local validateSize = #allPaths * opt.validateSize
   local trainSet, validateSet, testSet = {}, {}, {}
   local cnt = 1
@@ -70,7 +74,9 @@ function Loader.create(opt)
     else
       table.insert(testSet, v)
     end
+    cnt = cnt + 1
   end
+  print(validateSet)
   self.allData = {}
   self.allData["train"] = trainSet
   self.allData["validate"] = validateSet
@@ -82,20 +88,25 @@ function Loader:iterator(split)
   local it = {}
   local fileCursor = 0
   local rawImage, labels = nil, nil
-  local patchCenterX, patchCenterY = 0
-  
+  local patchCenterX, patchCenterY = 0, 0
+ 
+  it.reset = function()
+    fileCursor = 0
+    patchCenterX, patchCenterY = 0, 0
+  end
+ 
   -- raw images only has data in channel 1
   local function getBatchData()
     local batchSize, patchSize = self.batchSize, self.patchSize
     local imageW, imageH = rawImage:size(2), rawImage:size(3)
-    local data = torch.Tensor(batchSize, patchSize, patchSize)
-    local label = torch.ones(batchSize)
+    local data = torch.Tensor(batchSize, 1, patchSize, patchSize)
+    local label = torch.ones(batchSize, patchSize, patchSize)
     
     local cnt = 0
     while cnt < batchSize and patchCenterX <= imageW - patchSize/2 and patchCenterY <= imageH - patchSize/2 do
       cnt = cnt + 1
-      data[cnt] = rawImage[1]:sub(patchCenterX-patchSize/2+1, patchCenterX+patchSize/2, patchCenterY-patchSize/2+1, patchCenterY+patchSize/2)
-      label[cnt] = labels[patchCenterX][patchCenterY]
+      data[cnt][1] = rawImage[1]:sub(patchCenterX-patchSize/2+1, patchCenterX+patchSize/2, patchCenterY-patchSize/2+1, patchCenterY+patchSize/2)
+      label[cnt] = labels:sub(patchCenterX-patchSize/2+1, patchCenterX+patchSize/2, patchCenterY-patchSize/2+1, patchCenterY+patchSize/2)
       patchCenterX = patchCenterX + self.spacing
       if patchCenterX > imageW - patchSize/2 then
         patchCenterY = patchCenterY + self.spacing
@@ -107,14 +118,31 @@ function Loader:iterator(split)
     if cnt < batchSize then
       patchCenterX, patchCenterY = 0, 0
     end
-    return data, label
+    return data, label:view(label:nElement())
   end
   
   local function getLabelImage(labeledFile)
     local labeledImage = gm.Image(labeledFile):toTensor('byte','RGB','DHW')
-    labels = torch.eq(rawImage[2], labeledImage[2]) + 1  -- class = 1 is abnormal, class = 2 is normal
+    local labels = torch.eq(rawImage[2], labeledImage[2]) + 1  -- class = 1 is abnormal, class = 2 is normal
+    return labels
+  end
+ 
+  it.getImageSize = function()
+    return rawImage:size()
   end
   
+  it.getFileCursor = function()
+    return fileCursor
+  end
+
+  it.getPatchCenterX = function()
+    return patchCenterX
+  end
+
+  it.getPatchCenterY = function()
+    return patchCenterY
+  end
+ 
   it.nextBatch = function()
     if patchCenterX < 1 then
       fileCursor = fileCursor + 1
