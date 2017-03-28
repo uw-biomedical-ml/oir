@@ -2,6 +2,7 @@ require 'torch'
 require 'lfs'
 require 'gnuplot'
 require 'paths'
+require 'image'
 
 local gm = require 'graphicsmagick'
 
@@ -54,12 +55,17 @@ function Loader.create(opt)
   local self = {}
   setmetatable(self, Loader)
   self.batchSize = opt.batchSize
+  -- for the first iterator
   self.patchSize = opt.patchSize
   local spacing = opt.spacing
   if not spacing or spacing < 0 then
     spacing = opt.patchSize
   end
   self.spacing = spacing  
+  
+  -- for the downSampled iterator
+  self.imageW = opt.imageW
+  self.imageH = opt.imageH
  
   local allPaths = retrieveAndSaveAllPaths(opt.dir)
   local trainSize = table.getn(allPaths) * opt.trainSize
@@ -76,7 +82,6 @@ function Loader.create(opt)
     end
     cnt = cnt + 1
   end
-  print(validateSet)
   self.allData = {}
   self.allData["train"] = trainSet
   self.allData["validate"] = validateSet
@@ -156,6 +161,51 @@ function Loader:iterator(split)
     end
     return getBatchData()
   end
+  return it
+end
+
+function Loader:iteratorDownSampled(split)
+  local it = {}
+  local fileCursor = 0
+     
+  local function getLabel(labeledFile, rawImage)
+    local labeledImage = gm.Image(labeledFile):toTensor('byte','RGB','DHW')
+    local originLabels = torch.eq(rawImage[2], labeledImage[2]) -- 0 is abnormal, 1 is normal
+    local downSampled = image.scale(originLabels, self.imageW*2, self.imageH*2)
+    local labels = torch.gt(downSampled, 0.5) + 1  -- 1 is abnormal, 2 is normal
+    return labels
+  end
+
+  local function getQuadrant(output, input, b)
+    local p1 = input[{{1, self.imageW},{1, self.imageH}}]
+    output[b] = input[{{1, self.imageW},{1, self.imageH}}]
+    output[b+1] = input[{{self.imageW+1, self.imageW*2}, {1, self.imageH}}]
+    output[b+2] = input[{{1, self.imageW}, {self.imageH+1, self.imageH*2}}]
+    output[b+3] = input[{{self.imageW+1, self.imageW*2}, {self.imageH+1, self.imageH*2}}]
+  end
+
+  it.nextBatch = function()
+    local nFiles = self.batchSize / 4
+    local fcnt, b = 0, 1
+    local data = torch.ByteTensor(self.batchSize, 1, self.imageW, self.imageH)
+    local label = torch.ByteTensor(self.batchSize, self.imageW, self.imageH)
+    while fcnt < nFiles do
+      fileCursor = fileCursor + 1
+      if fileCursor > #self.allData[split] then
+        fileCursor = 1
+      end
+      fcnt = fcnt + 1
+      local labeledFile = self.allData[split][fileCursor]
+      local rawImage = gm.Image(getRawFilePath(labeledFile)):toTensor('byte','RGB','DHW')
+      local dataDownSampled = image.scale(rawImage[1]:float(), self.imageW*2, self.imageH*2)
+      local labelDownSampled = getLabel(labeledFile, rawImage)
+      getQuadrant(data[{{},1}], dataDownSampled, b)
+      getQuadrant(label, labelDownSampled, b)
+      b = b + 4
+    end
+    return data, label:view(label:nElement())
+  end
+  
   return it
 end
 

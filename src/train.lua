@@ -5,13 +5,15 @@ require 'optim'
 local model = require 'model'
 
 local cmd = torch.CmdLine()
-cmd:option('--dir', '/home/saxiao/eclipse/workspace/oir/data/', 'data directory')
+cmd:option('--dir', '/Users/saxiao/AI/oir/data/', 'data directory')
 cmd:option('--nClasses', 2, 'number of classes')
 cmd:option('--trainSize', 0.5, 'training set percentage')
 cmd:option('--validateSize', 0.5, 'validate set percentage')
-cmd:option('--batchSize', 10, 'batch size')
+cmd:option('--batchSize', 8, 'batch size')
 cmd:option('--patchSize', 64, 'patch size')
 cmd:option('--spacing', -1, 'spacing between each patch, -1 means no overlapping, so same as the patchSize')
+cmd:option('--imageW', 64, 'CNN input image width')
+cmd:option('--imageH', 64, 'CNN input image height')
 
 -- training options
 cmd:option('--nIterations', 3000, 'patch size')
@@ -19,11 +21,11 @@ cmd:option('--learningRate', 1e-3, 'patch size')
 cmd:option('--momentum', 0.9, 'patch size')
 
 -- gpu options
-cmd:option('--gpuid', 0, 'patch size')
+cmd:option('--gpuid', -1, 'patch size')
 cmd:option('--seed', 123, 'patch size')
 
 -- checkpoint options
-cmd:option('--plotDir', '/home/saxiao/eclipse/workspace/oir/plot/', 'plot directory')
+cmd:option('--plotDir', '/Users/saxiao/AI/oir/plot/', 'plot directory')
 
 local opt = cmd:parse(arg)
 
@@ -59,7 +61,7 @@ if opt.gpuid == 0 then
 end
 
 local params, grads = net:getParameters()
-local trainIter = loader:iterator("train")
+local trainIter = loader:iteratorDownSampled("train")
 
 local type = net:type()
 
@@ -101,7 +103,6 @@ local feval = function(w)
   local loss = criterion:forward(predicted, label)
   local gradScore = criterion:backward(predicted, label)
   net:backward(data, gradScore)
-
   return loss, grads
 end
 

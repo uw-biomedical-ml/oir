@@ -1,6 +1,10 @@
+require 'torch'
+require 'nn'
+require 'nngraph'
+
 local model = {}
 
-function model.uNetNOCopy(opt)
+function model.uNetNoCopy(opt)
   local input = - nn.Identity()
   -- contracting path
   local c1 = input
@@ -27,7 +31,7 @@ function model.uNetNOCopy(opt)
                    - nn.ReLU()
                    - nn.SpatialConvolutionMM(128,128,3,3,1,1,1,1)  -- 128 filters, output 128 x patchSize/2 x patchSize/2
                    - nn.ReLU()
-                   - nn.SpatialMaxPooling(2,2) -- output: 128 x patchSize x patchSize
+                   - nn.SpatialUpSamplingNearest(2) -- output: 128 x patchSize x patchSize
   local c1Mirror = c2Mirror
                    - nn.SpatialConvolutionMM(128,64,3,3,1,1,1,1)  -- 64 filters, output 64 x patchSize x patchSize
                    - nn.ReLU()
@@ -71,7 +75,7 @@ function model.uNet(opt)
                    - nn.ReLU()
                    - nn.SpatialConvolutionMM(128,128,3,3,1,1,1,1)  -- 128 filters, output 128 x patchSize/2 x patchSize/2
                    - nn.ReLU()
-                   - nn.SpatialMaxPooling(2,2) -- output: 128 x patchSize x patchSize
+                   - nn.SpatialUpSamplingNearest(2) -- output: 128 x patchSize x patchSize
   local c1Mirror = {c2Mirror, c1}
                    - nn.JoinTable(2) -- output: (128+64) channels x patchSize x patchSize
                    - nn.SpatialConvolutionMM(128+64,64,3,3,1,1,1,1)  -- 64 filters, output 64 x patchSize x patchSize
