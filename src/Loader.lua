@@ -31,8 +31,7 @@ local function getRawFilePath(labeledFile)
   return rawFile
 end
 
-local function retrieveAndSaveAllPaths(dir)
-  local pathsFile = dir .. "allPaths.t7"
+local function retrieveAndSaveAllPaths(pathsFile, dir) 
   local cleanedLabeled = nil
   if not paths.filep(pathsFile) then
       local labeled = {}
@@ -67,7 +66,7 @@ function Loader.create(opt)
   self.imageW = opt.imageW
   self.imageH = opt.imageH
  
-  local allPaths = retrieveAndSaveAllPaths(opt.dir)
+  local allPaths = retrieveAndSaveAllPaths(opt.pathsFile, opt.dataDir)
   local trainSize = table.getn(allPaths) * opt.trainSize
   local validateSize = #allPaths * opt.validateSize
   local trainSet, validateSet, testSet = {}, {}, {}

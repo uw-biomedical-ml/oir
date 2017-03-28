@@ -5,15 +5,16 @@ require 'optim'
 local model = require 'model'
 
 local cmd = torch.CmdLine()
-cmd:option('--dir', '/Users/saxiao/AI/oir/data/', 'data directory')
+cmd:option('--dataDir', '/data/oir/CNTF/', 'data directory')
+cmd:option('--pathsFile', '/home/saxiao/oir/data/cntf.t7', 'data directory')
 cmd:option('--nClasses', 2, 'number of classes')
 cmd:option('--trainSize', 0.5, 'training set percentage')
 cmd:option('--validateSize', 0.5, 'validate set percentage')
 cmd:option('--batchSize', 8, 'batch size')
 cmd:option('--patchSize', 64, 'patch size')
 cmd:option('--spacing', -1, 'spacing between each patch, -1 means no overlapping, so same as the patchSize')
-cmd:option('--imageW', 64, 'CNN input image width')
-cmd:option('--imageH', 64, 'CNN input image height')
+cmd:option('--imageW', 320, 'CNN input image width')
+cmd:option('--imageH', 320, 'CNN input image height')
 
 -- training options
 cmd:option('--nIterations', 3000, 'patch size')
@@ -21,11 +22,12 @@ cmd:option('--learningRate', 1e-3, 'patch size')
 cmd:option('--momentum', 0.9, 'patch size')
 
 -- gpu options
-cmd:option('--gpuid', -1, 'patch size')
+cmd:option('--gpuid', 0, 'patch size')
 cmd:option('--seed', 123, 'patch size')
 
 -- checkpoint options
 cmd:option('--plotDir', '/Users/saxiao/AI/oir/plot/', 'plot directory')
+cmd:option('--checkpointDir', '/home/saxiao/oir/checkpoint/', 'plot directory')
 
 local opt = cmd:parse(arg)
 
@@ -127,5 +129,5 @@ end
 local trainHistory = {}
 trainHistory.trainAccuracy = trainAccuracyHistory
 trainHistory.validateAccuracy = validateAccuracyHistory
-local trainHistoryFile = opt.plotDir .. "trainHistory.t7"
+local trainHistoryFile = opt.checkpointDir .. "trainHistory.t7"
 torch.save(trainHistoryFile, trainHistory)
