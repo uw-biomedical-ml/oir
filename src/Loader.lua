@@ -88,6 +88,12 @@ function Loader.create(opt)
   return self
 end
 
+local function getLabel(labeledFile, rawImage)
+    local labeledImage = gm.Image(labeledFile):toTensor('byte','RGB','DHW')
+    local labels = torch.eq(rawImage[2], labeledImage[2]) + 1 -- 1 is abnormal, 2 is normal
+    return labels 
+end
+
 function Loader:iterator(split)
   local it = {}
   local fileCursor = 0
@@ -125,11 +131,11 @@ function Loader:iterator(split)
     return data, label:view(label:nElement())
   end
   
-  local function getLabelImage(labeledFile)
-    local labeledImage = gm.Image(labeledFile):toTensor('byte','RGB','DHW')
-    local labels = torch.eq(rawImage[2], labeledImage[2]) + 1  -- class = 1 is abnormal, class = 2 is normal
-    return labels
-  end
+--  local function getLabelImage(labeledFile)
+--    local labeledImage = gm.Image(labeledFile):toTensor('byte','RGB','DHW')
+--    local labels = torch.eq(rawImage[2], labeledImage[2]) + 1  -- class = 1 is abnormal, class = 2 is normal
+--    return labels
+--  end
  
   it.getImageSize = function()
     return rawImage:size()
@@ -155,7 +161,7 @@ function Loader:iterator(split)
       end
       local labeledFile = self.allData[split][fileCursor]
       rawImage = gm.Image(getRawFilePath(labeledFile)):toTensor('byte','RGB','DHW')
-      labels = getLabelImage(labeledFile)
+      labels = getLabel(labeledFile, rawImage)
       patchCenterX, patchCenterY = self.patchSize / 2, self.patchSize / 2
     end
     return getBatchData()
@@ -163,15 +169,40 @@ function Loader:iterator(split)
   return it
 end
 
+function Loader:iterator2(split)
+  local it = {}
+  local fileCursor = 0
+  
+  it.nextBatch = function()
+    local nFiles = self.batchSize / 4
+    local fcnt, b = 0, 1
+    local data, label = {}, {} -- raw images may have different size, so cannot use a tensor to store
+    while fcnt < nFiles do
+      fileCursor = fileCursor + 1
+      if fileCursor > #self.allData[split] then
+        fileCursor = 1
+      end
+      fcnt = fcnt + 1
+      local labeledFile = self.allData[split][fileCursor]
+      local rawImage = gm.Image(getRawFilePath(labeledFile)):toTensor('byte','RGB','DHW')
+      local rawLabel = getLabel(labeledFile, rawImage)
+      table.insert(data, rawImage[1]) -- only the first channel has useful info
+      table.insert(label, rawLabel)  
+  end
+    return data, label
+  end
+
+  return it  
+end
+
 function Loader:iteratorDownSampled(split)
   local it = {}
   local fileCursor = 0
      
-  local function getLabel(labeledFile, rawImage)
-    local labeledImage = gm.Image(labeledFile):toTensor('byte','RGB','DHW')
-    local originLabels = torch.eq(rawImage[2], labeledImage[2]) -- 0 is abnormal, 1 is normal
+  local function getDownSampledLabel(labeledFile, rawImage)
+    local originLabels = getLabel(labeledFile, rawImage)
     local downSampled = image.scale(originLabels, self.imageW*2, self.imageH*2)
-    local labels = torch.gt(downSampled, 0.5) + 1  -- 1 is abnormal, 2 is normal
+    local labels = torch.gt(originLabels, 1.5)  -- 1 is abnormal, 2 is normal
     return labels
   end
 
@@ -196,8 +227,8 @@ function Loader:iteratorDownSampled(split)
       fcnt = fcnt + 1
       local labeledFile = self.allData[split][fileCursor]
       local rawImage = gm.Image(getRawFilePath(labeledFile)):toTensor('byte','RGB','DHW')
-      local dataDownSampled = image.scale(rawImage[1]:float(), self.imageW*2, self.imageH*2)
-      local labelDownSampled = getLabel(labeledFile, rawImage)
+      local dataDownSampled = image.scale(rawImage[1], self.imageW*2, self.imageH*2)
+      local labelDownSampled = getDownSampledLabel(labeledFile, rawImage)
       getQuadrant(data[{{},1}], dataDownSampled, b)
       getQuadrant(label, labelDownSampled, b)
       b = b + 4
