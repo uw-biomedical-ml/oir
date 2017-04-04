@@ -47,6 +47,7 @@ function model.uNetNoCopy(opt)
   return g
 end
 
+-- problem: only has receptive field of 32x32
 function model.uNet(opt)
   local input = - nn.Identity()
   -- contracting path

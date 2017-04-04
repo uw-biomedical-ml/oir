@@ -6,21 +6,18 @@ require 'image'
 local model = require 'model'
 
 local cmd = torch.CmdLine()
-cmd:option('--dataDir', '/data/oir/CNTF/', 'data directory')
-cmd:option('--pathsFile', '/home/saxiao/oir/data/cntf.t7', 'data directory')
+cmd:option('--trainData', '/home/saxiao/eclipse/workspace/oir/data/cntf/', 'data directory')
 cmd:option('--nClasses', 2, 'number of classes')
-cmd:option('--trainSize', 0.5, 'training set percentage')
-cmd:option('--validateSize', 0.5, 'validate set percentage')
-cmd:option('--batchSize', 8, 'batch size')
-cmd:option('--patchSize', 64, 'patch size')
-cmd:option('--spacing', -1, 'spacing between each patch, -1 means no overlapping, so same as the patchSize')
-cmd:option('--imageW', 128, 'CNN input image width') -- 320 still works
-cmd:option('--imageH', 128, 'CNN input image height')
+cmd:option('--trainSize', 0.7, 'training set percentage')
+cmd:option('--batchSize', 1, 'batch size')
 
 -- training options
-cmd:option('--nIterations', 10, 'patch size')
+cmd:option('--nIterations', 1000, 'patch size')
 cmd:option('--learningRate', 1e-3, 'patch size')
+cmd:option('--minLearningRate', 1e-5, 'minimum learning rate')
 cmd:option('--momentum', 0.9, 'patch size')
+cmd:option('--learningDecayRate', 0.01, 'learning rate decay rate')
+
 cmd:option('--saveEvery', -1, 'number of iterations every which to save the checkpoint')
 cmd:option('--plotTraining', true, 'plot predictions during training')
 
@@ -29,8 +26,8 @@ cmd:option('--gpuid', 0, 'patch size')
 cmd:option('--seed', 123, 'patch size')
 
 -- checkpoint options
-cmd:option('--plotDir', '/home/saxiao/oir/plot/', 'plot directory')
-cmd:option('--checkpointDir', '/home/saxiao/oir/checkpoint/', 'plot directory')
+cmd:option('--plotDir', '/home/saxiao/eclipse/workspace/oir/plot/', 'plot directory')
+cmd:option('--checkpointDir', '/home/saxiao/eclipse/workspace/oir/checkpoint/', 'checkpoint directory')
 
 local opt = cmd:parse(arg)
 
@@ -66,163 +63,111 @@ if opt.gpuid == 0 then
 end
 
 local params, grads = net:getParameters()
-local trainIter = loader:iterator2("train")
-
 local type = net:type()
 
-local function getPredictedLabelOriginalSize(predicted, rawData)
-  local rawW, rawH = rawData:size(1), rawData:size(2)
-  local predictedDownsampled = torch.Tensor():resize(opt.imageW*2, opt.imageH*2, 2)
-  predictedDownsampled[{{1,opt.imageW},{1,opt.imageH}}]:copy(predicted[1])
-  predictedDownsampled[{{opt.imageW+1,opt.imageW*2},{1,opt.imageH}}]:copy(predicted[2])
-  predictedDownsampled[{{1,opt.imageW},{opt.imageH+1,opt.imageH*2}}]:copy(predicted[3])
-  predictedDownsampled[{{opt.imageW+1,opt.imageW*2},{opt.imageH+1,opt.imageH*2}}]:copy(predicted[4])
-  local predictedRawsize = predictedDownsampled.new():resize(rawW, rawH, 2)
-  predictedRawsize[{{},{},1}] = image.scale(predictedDownsampled[{{},{},1}], rawW, rawH)
-  predictedRawsize[{{},{},2}] = image.scale(predictedDownsampled[{{},{},2}], rawW, rawH)
-  local _, predictedLabel = predictedRawsize:max(3)
-  predictedLabel = predictedLabel:squeeze():type(type)
-  return predictedLabel
-end
-
-local function accuracyInflateToOriginalSize(predicted, rawData, rawLabel)
-  local predictedLabel = getPredictedLabelOriginalSize(predicted, rawData) 
-  rawLabel = rawLabel:type(type)
-  local hit = torch.eq(predictedLabel, rawLabel):sum()
-  return hit / rawLabel:nElement()
-end
-
-local function accuracy(output, target)
+local currentIter = 0
+local function calAccuracy(output, target)
   local _, predict = output:max(2)
   predict = predict:squeeze():type(type)
   local hit = torch.eq(predict, target):sum()
   return hit / target:nElement()
 end
 
--- for two classes
-local function diceCoef(output, target)
-  -- 2TP/(2TP+FP+FN)
-  local _, predict = output:max(2)
-  local tpfp = torch.eq(predict, 1)
-  tpfp = tpfp:squeeze():type(type)
-  local tpfn = torch.eq(target, 1)
-  tpfn = tpfn:squeeze():type(type)
-  local tp = torch.eq(tpfp, tpfn)
-  return 2*tp / (tpfp + tpfn)
+local function combineQuadrants(input, i)
+  local imageW, imageH = input:size(2)*2, input:size(3)*2
+  local output = input.new():resize(imageW, imageH):zero()
+  output[{{1, imageW/2},{1, imageH/2}}]:copy(input[i])
+  output[{{imageW/2+1, imageW},{1, imageH/2}}]:copy(input[i+1])
+  output[{{1, imageW/2},{imageH/2+1, imageH}}]:copy(input[i+2])
+  output[{{imageW/2+1, imageW},{imageH/2+1, imageH}}]:copy(input[i+3])
+  return output
 end
 
-local currentIter = 0
-local trainAccuracy = nil
-local trainAccuracyHistory = {}
-local validateAccuracyHistory = {}
-
-local function getQuadrant(output, input, b)
-  output[b] = input[{{1, opt.imageW},{1, opt.imageH}}]
-  output[b+1] = input[{{opt.imageW+1, opt.imageW*2}, {1, opt.imageH}}]
-  output[b+2] = input[{{1, opt.imageW}, {opt.imageH+1, opt.imageH*2}}]
-  output[b+3] = input[{{opt.imageW+1, opt.imageW*2}, {opt.imageH+1, opt.imageH*2}}]
-end
-
-local function downsampling(rawData, rawLabel)
-  local data = torch.ByteTensor():resize(opt.batchSize, 1, opt.imageW, opt.imageH)
-  local label = torch.ByteTensor():resize(opt.batchSize, opt.imageW, opt.imageH)
-  local b = 1
-  for i in ipairs(rawData) do
-    local dataDownSampled = image.scale(rawData[i], opt.imageW*2, opt.imageH*2)
-    local labelDownSampled = image.scale(rawLabel[i], opt.imageW*2, opt.imageH*2)
-    getQuadrant(data[{{},1}], dataDownSampled, b)
-    getQuadrant(label, labelDownSampled, b)
-    b = b + 4
+local function plotPrediction(raw, nnOutput, label)
+  local imageW, imageH = raw:size(2)*2, raw:size(3)*2
+  local _, predict = nnOutput:max(2)
+  print("predict highlighted", predict:eq(2):sum()/predict:nElement())
+  local predictedLabel = predict:eq(2):view(opt.batchSize*4, imageW/2, imageH/2)  -- 1 is hightlighted (abnormal), 0 is normal
+  local i = 1
+  for b = 1, opt.batchSize do
+    local combinedRaw = combineQuadrants(raw, i)
+    local combinedPredictedLabel = combineQuadrants(predictedLabel, i)
+    local predictedImage = raw.new():resize(3, imageW, imageH):zero()
+    predictedImage[1]:copy(combinedRaw)
+    predictedImage[1]:maskedFill(combinedPredictedLabel, 255)
+    predictedImage[2]:maskedFill(combinedPredictedLabel, 255)
+    
+    local combinedLabel = combineQuadrants(label, i)
+    local trueImage = raw.new():resize(3, imageW, imageH):zero()
+    trueImage[1]:copy(combinedRaw)
+    trueImage[1]:maskedFill(combinedLabel:eq(2), 255)
+    trueImage[2]:maskedFill(combinedLabel:eq(2), 255)
+    i = i + 4
+    
+    local rawImage = raw.new():resize(3, imageW, imageH):zero()
+    rawImage[1]:copy(combinedRaw)
+    local rawFile = opt.plotDir .. "iter_" .. currentIter .. "_" .. b .."_r.png"
+    image.save(rawFile, rawImage)
+    local predictedFile = opt.plotDir .. "iter_" .. currentIter .. "_" .. b .."_p.png"
+    image.save(predictedFile, predictedImage)
+    local trueFile = opt.plotDir .. "iter_" .. currentIter .. "_" .. b .."_t.png"
+    image.save(trueFile, trueImage)
   end
-  return data, label
 end
 
+local trainIter = loader:iterator("train")
+local trainAccuracy = nil
 local feval = function(w)
   if w ~= params then
     params:copy(w)
   end
   grads:zero()
-
-  local rawData, rawLabel = trainIter.nextBatch()
-  local data, label = downsampling(rawData, rawLabel)
-  data = data:type(type)
-  label = label:type(type)
-  local predicted = net:forward(data)
+  
+  local data, label = trainIter.nextBatch()
+  local originalType = data:type()
+  
+  data = data:cuda()
+  label = label:cuda()
+  
+  print("true highlighted = ", label:eq(2):sum()/label:nElement())
+--    local d = data[{{},1}]:type(originalType)
+--  dataimage = d.new():resize(3,data:size(3), data:size(4)):zero()
+--  dataimage[1] = d[1]
+--  image.save("/home/saxiao/tmp/tmp.png", dataimage)
+  
+  local output = net:forward(data)
   local labelView = label:view(label:nElement())
-  trainAccuracy = accuracy(predicted, labelView)
-  table.insert(trainAccuracyHistory, trainAccuracy)
-  local loss = criterion:forward(predicted, labelView)
-  local gradScore = criterion:backward(predicted, labelView)
-  net:backward(data, gradScore)
-
+  trainAccuracy = calAccuracy(output, labelView)
+  local loss = criterion:forward(output, labelView)
+  
+  local dloss = criterion:backward(output, labelView)
+  net:backward(data, dloss)
+  
   if opt.plotTraining then
-    -- just print the first image in the batch
-    local predictedView = predicted:view(opt.batchSize, opt.imageW, opt.imageH, 2)
-    local predictedLabel = getPredictedLabelOriginalSize(predictedView[{{1,4}}], rawData[1], rawLabel[1])
-    local rawW, rawH = rawData[1]:size(1), rawData[1]:size(2)
-    local predictedImage = data.new():resize(3,rawW, rawH):zero()
-    predictedImage[1]:copy(rawData[1])
-    local predictedMask = predictedLabel:eq(1)
-    print(predictedImage:size(), predictedMask:size())
-    predictedImage[1]:maskedFill(predictedMask, 0)
-    predictedImage[2]:maskedFill(predictedMask, 255)
-    predictedImage[3]:maskedFill(predictedMask, 255)
-    local rawFile = opt.plotDir .. "raw_iter" .. currentIter .. ".png"
-    local rawImage = rawData[1].new():resize(3, rawW, rawH):zero()
-    rawImage[1]:copy(rawData[1])
-    image.save(rawFile, rawImage)
-    local fileName = opt.plotDir .. "predicted_iter" .. currentIter .. ".png"
-    image.save(fileName, predictedImage)
-    local trueImage = data.new():resizeAs(predictedImage):zero()
-    trueImage[1]:copy(rawData[1])
-    local trueLabel = rawLabel[1]:type(type)
-    local trueMask = trueLabel:eq(1)
-    print(trueImage:type(), trueMask:type())
-    trueImage[1]:maskedFill(trueMask, 0)
-    trueImage[2]:maskedFill(trueMask, 255)
-    trueImage[3]:maskedFill(trueMask, 255)
-    local trueFileName = opt.plotDir .. "true_iter" .. currentIter .. ".png"
-    image.save(trueFileName, trueImage) 
+    local d, o, l = data[{{},1}]:type(originalType), output:float(), label:type(originalType)
+    plotPrediction(d, o, l)
   end
   
   return loss, grads
 end
 
-local validateIter = loader:iterator2("validate")
-local function validateAccuracy()
-  local rawData, rawLabel = validateIter.nextBatch()
-  local data, label = downsampling(rawData, rawLabel)
+local validateIter = loader:iterator("validate")
+local function validate()
+  local data, label = validateIter.nextBatch()
   data = data:type(type)
   label = label:type(type)
-  local output = net:forward(data):view(opt.batchSize, opt.imageW, opt.imageH, 2)
-  
-  local total = 0
-  local nImages = opt.batchSize / 4
-  for i = 1, nImages do
-    total = total + accuracyInflateToOriginalSize(output[{{4*(i-1)+1, 4*i}}], rawData[i], rawLabel[i])
-  end
-  return total / nImages  
+  local output = net:forward(data)
+  return calAccuracy(data, label:view(label:nElement()))
 end
 
-local validateAccuracyHistory = {}
-local optimOpt = {learningRate = opt.learningRate, momentum = opt.momentum}
+local lr = opt.learningRate
+local optimOpt = {learningRate = lr, momentum = opt.momentum}
 for i = 1, opt.nIterations do
   currentIter = i
   local _, loss = optim.adagrad(feval, params, optimOpt)
-  local valudateAccuracy = validateAccuracy()
-  print("i=", i, " loss=", loss[1], " trainAccuracy=", trainAccuracy, " validateAccuracy=", valudateAccuracy)
-  table.insert(validateAccuracyHistory, valudateAccuracy)
-  if opt.saveEvery > 0 and i % opt.saveEvery == 0 then
-    local checkpoint = {}
-    checkpoint.iter = i
-    checkpoint.model = net
-    local fileName = opt.checkpointDir .. "iter_" .. i
-    torch.save(fileName, checkpoint)  
+  print("i=", i, " loss=", loss[1], " trainAccuracy=", trainAccuracy, " validateAccuracy=", validate())
+  
+  if lr > opt.minLearningRate and opt.learningDecayRate and opt.learningDecayRate > 0 then
+    lr = lr * (1 - opt.learningDecayRate)
   end
 end
-
-local trainHistory = {}
-trainHistory.trainAccuracy = trainAccuracyHistory
-trainHistory.validateAccuracy = validateAccuracyHistory
-local trainHistoryFile = opt.checkpointDir .. "trainHistory.t7"
-torch.save(trainHistoryFile, trainHistory)
