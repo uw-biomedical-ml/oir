@@ -6,14 +6,14 @@ require 'image'
 local model = require 'model'
 
 local cmd = torch.CmdLine()
-cmd:option('--trainData', '/home/saxiao/eclipse/workspace/oir/data/cntf/', 'data directory')
+cmd:option('--trainData', '/home/saxiao/oir/data/cntf/', 'data directory')
 cmd:option('--nClasses', 2, 'number of classes')
 cmd:option('--trainSize', 0.7, 'training set percentage')
 cmd:option('--batchSize', 1, 'batch size')
 
 -- training options
-cmd:option('--nIterations', 1000, 'patch size')
-cmd:option('--learningRate', 1e-3, 'patch size')
+cmd:option('--nIterations', 10, 'patch size')
+cmd:option('--learningRate', 1e-2, 'patch size')
 cmd:option('--minLearningRate', 1e-5, 'minimum learning rate')
 cmd:option('--momentum', 0.9, 'patch size')
 cmd:option('--learningDecayRate', 0.01, 'learning rate decay rate')
@@ -26,8 +26,8 @@ cmd:option('--gpuid', 0, 'patch size')
 cmd:option('--seed', 123, 'patch size')
 
 -- checkpoint options
-cmd:option('--plotDir', '/home/saxiao/eclipse/workspace/oir/plot/', 'plot directory')
-cmd:option('--checkpointDir', '/home/saxiao/eclipse/workspace/oir/checkpoint/', 'checkpoint directory')
+cmd:option('--plotDir', '/home/saxiao/oir/plot/cntf/', 'plot directory')
+cmd:option('--checkpointDir', '/home/saxiao/oir/checkpoint/', 'checkpoint directory')
 
 local opt = cmd:parse(arg)
 
@@ -77,13 +77,39 @@ local function combineQuadrants(input, i)
   local imageW, imageH = input:size(2)*2, input:size(3)*2
   local output = input.new():resize(imageW, imageH):zero()
   output[{{1, imageW/2},{1, imageH/2}}]:copy(input[i])
-  output[{{imageW/2+1, imageW},{1, imageH/2}}]:copy(input[i+1])
-  output[{{1, imageW/2},{imageH/2+1, imageH}}]:copy(input[i+2])
+  output[{{1, imageW/2},{imageH/2+1, imageH}}]:copy(input[i+1])
+  output[{{imageW/2+1, imageW},{1, imageH/2}}]:copy(input[i+2])
   output[{{imageW/2+1, imageW},{imageH/2+1, imageH}}]:copy(input[i+3])
   return output
 end
 
 local function plotPrediction(raw, nnOutput, label)
+  local imageW, imageH = raw:size(2), raw:size(3)
+  local _, predict = nnOutput:max(2)
+  print("predict highlighted", predict:eq(2):sum()/predict:nElement())
+  for b = 1, opt.batchSize do 
+    local rawImage = raw.new():resize(3, imageW, imageH):zero()
+    rawImage[1]:copy(raw)
+    local rawFile = opt.plotDir .. "iter_" .. currentIter .. "_" .. b .."_r.png"
+    image.save(rawFile, rawImage)
+    
+    local predictedImage = raw.new():resize(3,imageW, imageH):zero()
+    predictedImage[1]:copy(raw)
+    predictedImage[1]:maskedFill(predict:eq(2), 255)
+    predictedImage[2]:maskedFill(predict:eq(2), 255)
+    local predictedFile = opt.plotDir .. "iter_" .. currentIter .. "_" .. b .."_p.png"
+    image.save(predictedFile, predictedImage)
+    
+    local trueImage = raw.new():resize(3, imageW, imageH):zero()
+    trueImage[1]:copy(raw)
+    trueImage[1]:maskedFill(label:eq(2), 255)
+    trueImage[2]:maskedFill(label:eq(2), 255)
+    local trueFile = opt.plotDir .. "iter_" .. currentIter .. "_" .. b .."_t.png"
+    image.save(trueFile, trueImage)
+  end
+end
+
+local function plotPredictionCombinedQuadrant(raw, nnOutput, label)
   local imageW, imageH = raw:size(2)*2, raw:size(3)*2
   local _, predict = nnOutput:max(2)
   print("predict highlighted", predict:eq(2):sum()/predict:nElement())

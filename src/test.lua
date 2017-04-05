@@ -4,8 +4,8 @@ require 'image'
 
 local gm = require 'graphicsmagick'
 
-local Loader = require 'Loader'
-local dir = "/home/saxiao/eclipse/workspace/oir/"
+local Loader = require 'LoaderOld'
+local dir = "/home/saxiao/oir/"
 
 local function drawImage(raw, label, fileName)
   local labeledImage = raw.new():resize(3, raw:size(1), raw:size(2)):zero()
@@ -62,7 +62,7 @@ end
 
 local function inspectImages()
   local opt = {}
-  opt.dataDir = "/home/saxiao/oir/CNTF"
+  opt.dataDir = "/data/oir/CNTF"
   opt.pathsFile = dir .. "data/cntf.txt"
   opt.batchSize = 1
   opt.trainSize = 1
@@ -71,7 +71,7 @@ local function inspectImages()
   
   local nImages = #loader.allData["train"]
   local w, h = 256, 256
-  local start, endIndex = 1, nImages
+  local start, endIndex = 4, nImages  -- nImages
   for i = start, endIndex do
     local qfile = loader.allData["train"][i]
     print(string.format("i=%d",i), qfile)
@@ -89,17 +89,21 @@ local function inspectImages()
 --    local fileName = dir .. "plot/cntf/" .. i .. ".png"
 --    drawImage(raw[1], label, fileName)
     local dataFileName = dir .. "data/cntf/" .. i .. ".t7"
+    local imageFileName = dir .. "plot/cntf/" .. i .. ".png"
     downSampling(raw[1], label, dataFileName, w, h)
   end
   print(nImages)
-  
+  local stats = {}
+  stats.nfiles = nImages
+  torch.save(dir .. "data/cntf/stats.t7", stats)
+
 end
 
 --inspectImages()
 
---local stats = {}
---stats.nfiles = 195
---torch.save(dir .. "data/cntf/stats.t7", stats)
+local stats = {}
+stats.nfiles = 195
+torch.save(dir .. "data/cntf/stats.t7", stats)
 
 --local dir = "/home/saxiao/eclipse/workspace/oir/"
 --local file = torch.load(dir .. "data/allPaths.t7")

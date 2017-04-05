@@ -32,8 +32,8 @@ function Loader:iterator(split)
   local function getQuadrant(output, input, b)
     local imageW, imageH = input:size(1), input:size(2)
     output[b] = input[{{1, imageW/2},{1, imageH/2}}]
-    output[b+1] = input[{{imageW/2+1, imageW}, {1, imageH/2}}]
-    output[b+2] = input[{{1, imageW/2}, {imageH/2+1, imageH}}]
+    output[b+1] = input[{{1, imageW/2}, {imageH/2+1, imageH}}]
+    output[b+2] = input[{{imageW/2+1, imageW}, {1, imageH/2}}]
     output[b+3] = input[{{imageW/2+1, imageW}, {imageH/2+1, imageH}}]
   end
   it.nextBatch = function ()
@@ -47,11 +47,13 @@ function Loader:iterator(split)
       local fileName = self.dataDir .. self.set[split][fileCursor] .. ".t7"
       local fileData = torch.load(fileName)
       if data:nElement() == 0 then
-        data:resize(self.batchSize*4, 1, fileData.raw:size(1)/2, fileData.raw:size(2)/2):zero()
-        label:resize(self.batchSize*4, fileData.raw:size(1)/2, fileData.raw:size(2)/2)
+        data:resize(self.batchSize, 1, fileData.raw:size(1), fileData.raw:size(2)):zero()
+        label:resize(self.batchSize, fileData.raw:size(1), fileData.raw:size(2))
       end
-      getQuadrant(data[{{},1}], fileData.raw, i)
-      getQuadrant(label, fileData.label, i)
+      data[i][1] = fileData.raw
+      label[i] = fileData.label
+--      getQuadrant(data[{{},1}], fileData.raw, i)
+--      getQuadrant(label, fileData.label, i)
     end
     return data, label+1  -- 1 is normal, 2 is hightlighted/abnormal
   end
