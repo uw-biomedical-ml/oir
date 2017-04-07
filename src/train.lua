@@ -9,11 +9,11 @@ local cmd = torch.CmdLine()
 cmd:option('--trainData', '/home/saxiao/oir/data/cntf/', 'data directory')
 cmd:option('--nClasses', 2, 'number of classes')
 cmd:option('--trainSize', 0.7, 'training set percentage')
-cmd:option('--batchSize', 1, 'batch size')
+cmd:option('--batchSize', 16, 'batch size')
 
 -- training options
-cmd:option('--nIterations', 10, 'patch size')
-cmd:option('--learningRate', 1e-2, 'patch size')
+cmd:option('--maxEpoch', 100, 'maxumum epochs to train')
+cmd:option('--learningRate', 1e-2, 'starting learning rate')
 cmd:option('--minLearningRate', 1e-5, 'minimum learning rate')
 cmd:option('--momentum', 0.9, 'patch size')
 cmd:option('--learningDecayRate', 0.01, 'learning rate decay rate')
@@ -54,6 +54,8 @@ local loader = Loader.create(opt)
 
 local net = model.uNet(opt)
 
+-- TODO: use cross validation to determine?
+local classWeight = torch.Tensor({0.4,0.6})
 local criterion = nn.CrossEntropyCriterion()
 
 -- ship the model to the GPU if desired
@@ -66,11 +68,27 @@ local params, grads = net:getParameters()
 local type = net:type()
 
 local currentIter = 0
-local function calAccuracy(output, target)
+local epoch = 1
+local function calHits(output, target)
   local _, predict = output:max(2)
   predict = predict:squeeze():type(type)
   local hit = torch.eq(predict, target):sum()
-  return hit / target:nElement()
+  return hit
+end
+
+-- for two classes
+local function diceCoef(output, target)
+  -- 2TP/(2TP+FP+FN)
+  local _, predict = output:max(2)
+  local tpfp = torch.eq(predict, 2)
+  tpfp = tpfp:squeeze():type(type)
+  local tpfpSum = tpfp:sum()
+  tpfp:maskedFill(tpfp:eq(0),2) -- tpfp=1, others=2
+  local tpfn = torch.eq(target, 2)  -- tpfn=1, others=0
+  tpfn = tpfn:squeeze():type(type)
+  local tpfnSum = tpfn:sum()
+  local tp = torch.eq(tpfp, tpfn)  -- tp=1, others=0
+  return tp:sum()*2 / (tpfpSum + tpfnSum)
 end
 
 local function combineQuadrants(input, i)
@@ -85,26 +103,28 @@ end
 
 local function plotPrediction(raw, nnOutput, label)
   local imageW, imageH = raw:size(2), raw:size(3)
-  local _, predict = nnOutput:max(2)
+  local _, predictFlat = nnOutput:max(2)
+  local predict = predictFlat:view(-1, imageW, imageH)
   print("predict highlighted", predict:eq(2):sum()/predict:nElement())
-  for b = 1, opt.batchSize do 
+  local iplot = math.ceil(opt.batchSize * math.random()) -- opt.batchSize
+  for b = iplot, iplot do 
     local rawImage = raw.new():resize(3, imageW, imageH):zero()
-    rawImage[1]:copy(raw)
-    local rawFile = opt.plotDir .. "iter_" .. currentIter .. "_" .. b .."_r.png"
+    rawImage[1]:copy(raw[b])
+    local rawFile = opt.plotDir .. "epoch_" .. epoch .. "_" .. b .."_r.png"
     image.save(rawFile, rawImage)
     
     local predictedImage = raw.new():resize(3,imageW, imageH):zero()
-    predictedImage[1]:copy(raw)
-    predictedImage[1]:maskedFill(predict:eq(2), 255)
-    predictedImage[2]:maskedFill(predict:eq(2), 255)
-    local predictedFile = opt.plotDir .. "iter_" .. currentIter .. "_" .. b .."_p.png"
+    predictedImage[1]:copy(raw[b])
+    predictedImage[1]:maskedFill(predict[b]:eq(2), 255)
+    predictedImage[2]:maskedFill(predict[b]:eq(2), 255)
+    local predictedFile = opt.plotDir .. "epoch_" .. epoch .. "_" .. b .."_p.png"
     image.save(predictedFile, predictedImage)
     
     local trueImage = raw.new():resize(3, imageW, imageH):zero()
-    trueImage[1]:copy(raw)
-    trueImage[1]:maskedFill(label:eq(2), 255)
-    trueImage[2]:maskedFill(label:eq(2), 255)
-    local trueFile = opt.plotDir .. "iter_" .. currentIter .. "_" .. b .."_t.png"
+    trueImage[1]:copy(raw[b])
+    trueImage[1]:maskedFill(label[b]:eq(2), 255)
+    trueImage[2]:maskedFill(label[b]:eq(2), 255)
+    local trueFile = opt.plotDir .. "epoch_" ..  epoch .. "_" .. b .."_t.png"
     image.save(trueFile, trueImage)
   end
 end
@@ -142,7 +162,8 @@ local function plotPredictionCombinedQuadrant(raw, nnOutput, label)
 end
 
 local trainIter = loader:iterator("train")
-local trainAccuracy = nil
+local trainHits, trainedSamples = 0, 0
+local trainDiceCoefSum, trainIters = 0, 0
 local feval = function(w)
   if w ~= params then
     params:copy(w)
@@ -153,23 +174,21 @@ local feval = function(w)
   local originalType = data:type()
   
   data = data:cuda()
-  label = label:cuda()
-  
-  print("true highlighted = ", label:eq(2):sum()/label:nElement())
---    local d = data[{{},1}]:type(originalType)
---  dataimage = d.new():resize(3,data:size(3), data:size(4)):zero()
---  dataimage[1] = d[1]
---  image.save("/home/saxiao/tmp/tmp.png", dataimage)
+  label = label:cuda() 
   
   local output = net:forward(data)
   local labelView = label:view(label:nElement())
-  trainAccuracy = calAccuracy(output, labelView)
+  trainHits = trainHits + calHits(output, labelView)
+  trainedSamples = trainedSamples + label:nElement()
+  trainDiceCoefSum = trainDiceCoefSum + diceCoef(output, labelView)
+  trainIters = trainIters + 1
   local loss = criterion:forward(output, labelView)
   
   local dloss = criterion:backward(output, labelView)
   net:backward(data, dloss)
   
-  if opt.plotTraining then
+  if opt.plotTraining and trainIter.epoch == epoch then
+    print("true highlighted = ", label:eq(2):sum()/label:nElement())
     local d, o, l = data[{{},1}]:type(originalType), output:float(), label:type(originalType)
     plotPrediction(d, o, l)
   end
@@ -177,22 +196,53 @@ local feval = function(w)
   return loss, grads
 end
 
-local validateIter = loader:iterator("validate")
 local function validate()
-  local data, label = validateIter.nextBatch()
-  data = data:type(type)
-  label = label:type(type)
-  local output = net:forward(data)
-  return calAccuracy(data, label:view(label:nElement()))
+  local validateIter = loader:iterator("validate")
+  local hits, n = 0, 0
+  local diceCoefSum, iters = 0, 0
+  while validateIter.epoch < 1 do
+    local data, label = validateIter.nextBatch()
+    data = data:cuda()
+    label = label:cuda()
+    local output = net:forward(data)
+    local labelView = label:view(label:nElement())
+    hits = hits + calHits(output, labelView)
+    n = n + label:nElement()
+    diceCoefSum = diceCoefSum + diceCoef(output, labelView)
+    iters = iters + 1
+  end
+  return hits/n, diceCoefSum/iters
 end
 
 local lr = opt.learningRate
 local optimOpt = {learningRate = lr, momentum = opt.momentum}
-for i = 1, opt.nIterations do
-  currentIter = i
+while epoch <= opt.maxEpoch do
+  currentIter = currentIter + 1
   local _, loss = optim.adagrad(feval, params, optimOpt)
-  print("i=", i, " loss=", loss[1], " trainAccuracy=", trainAccuracy, " validateAccuracy=", validate())
+  print("iter=", currentIter, " loss=", loss[1])
   
+  if trainIter.epoch == epoch then
+    local trainAccuracy = trainHits / trainedSamples
+    local trainDiceCoef = trainDiceCoefSum / trainIters
+    local validateAccuracy, validateDiceCoef = validate()
+    print("epoch=",epoch," loss=", loss[1], " trainAccuracy=", trainAccuracy, " validateAccuracy=", validateAccuracy, "trainDC=", trainDiceCoef, "validateDC=", validateDiceCoef)
+    local checkpoint = {}
+    checkpoint.epoch = epoch
+    checkpoint.iter = currentIter
+    checkpoint.loss = loss[1]
+    checkpoint.trainAccuracy = trainAccuracy
+    checkpoint.validateAccuracy = validateAccuracy
+    checkpoint.trainDiceCoef = trainDiceCoef
+    checkpoint.validateDiceCoef = validateDiceCoef
+    local fileName = string.format("%scntf/epoch_%d.t7",opt.checkpointDir, epoch)
+    torch.save(fileName, checkpoint)
+
+    trainHits = 0
+    trainedSamples = 0
+    epoch = epoch + 1
+    
+    collectgarbage()
+  end
   if lr > opt.minLearningRate and opt.learningDecayRate and opt.learningDecayRate > 0 then
     lr = lr * (1 - opt.learningDecayRate)
   end

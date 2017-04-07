@@ -28,7 +28,7 @@ end
 function Loader:iterator(split)
   local it = {}
   local fileCursor = 0
-  
+  it.epoch = 0  
   local function getQuadrant(output, input, b)
     local imageW, imageH = input:size(1), input:size(2)
     output[b] = input[{{1, imageW/2},{1, imageH/2}}]
@@ -43,6 +43,7 @@ function Loader:iterator(split)
       fileCursor = fileCursor + 1
       if fileCursor > self.set[split]:size(1) then
         fileCursor = 1
+        it.epoch = it.epoch + 1
       end
       local fileName = self.dataDir .. self.set[split][fileCursor] .. ".t7"
       local fileData = torch.load(fileName)

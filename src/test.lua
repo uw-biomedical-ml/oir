@@ -101,9 +101,12 @@ end
 
 --inspectImages()
 
-local stats = {}
-stats.nfiles = 195
-torch.save(dir .. "data/cntf/stats.t7", stats)
+local model = require "model"
+local opt = {}
+opt.nClasses = 2
+local net = model.uNet(opt)
+local input = torch.rand(4,1,64,64)
+net:forward(input)
 
 --local dir = "/home/saxiao/eclipse/workspace/oir/"
 --local file = torch.load(dir .. "data/allPaths.t7")
