@@ -3,6 +3,7 @@
 .settings/
 *.tif
 data/
-plot/
+plot/exp/
+plot/res512/
 checkpoint/
 *.txt
