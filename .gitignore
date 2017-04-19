@@ -7,3 +7,4 @@ plot/exp/
 plot/res512/
 checkpoint/
 *.txt
+*.log

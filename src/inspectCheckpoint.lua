@@ -11,12 +11,13 @@ require 'image'
 cutorch.setDevice(2) -- note +1 to make it 0 indexed! sigh lua
 cutorch.manualSeed(123)
 
-local resolution = "res256"
+local resolution = "res512"
 local batchSize = 16
 local rootDir = "/home/saxiao/oir/"
 local Loader = require 'Loader'
 local opt = {}
-opt.trainData = rootDir .. "data/" .. resolution .. "/train/"
+--opt.trainData = rootDir .. "data/" .. resolution .. "/train/"
+opt.trainData = rootDir .. "data/train/"
 opt.trainSize = 0.8 
 local loader = Loader.create(opt)
 local type = "torch.CudaTensor"
@@ -231,6 +232,6 @@ end
 local checkpointDir = rootDir .. "checkpoint/" .. resolution .. "/"
 local plotDir = rootDir .. "plot/" .. resolution .. "/"
 --plotProgress(checkpointDir, plotDir)
---evaluateErrorbar(checkpointDir, plotDir, 100)
-visualizeResult(checkpointDir, plotDir, "train", 20, 133)
+evaluateErrorbar(checkpointDir, plotDir, 100)
+--visualizeResult(checkpointDir, plotDir, "train", 20, 133)
 --visualizeResult(checkpointDir, plotDir .. "res512/", "validate", 10, 5)

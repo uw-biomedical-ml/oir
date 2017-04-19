@@ -4,12 +4,13 @@ require 'optim'
 require 'image'
 
 local model = require 'model'
+local resolution = "res256/augment"
 
 local cmd = torch.CmdLine()
-cmd:option('--trainData', '/home/saxiao/oir/data/train/', 'data directory')
+cmd:option('--trainData', "/home/saxiao/oir/data/" .. resolution .. "/train/", 'data directory')
 cmd:option('--nClasses', 2, 'number of classes')
 cmd:option('--trainSize', 0.8, 'training set percentage')
-cmd:option('--batchSize', 8, 'batch size')
+cmd:option('--batchSize', 32, 'batch size')
 
 -- training options
 cmd:option('--maxEpoch', 1000, 'maxumum epochs to train')
@@ -24,12 +25,12 @@ cmd:option('--plotTraining', false, 'plot predictions during training')
 cmd:option('--plotValidate', false, 'plot predictions during training')
 
 -- gpu options
-cmd:option('--gpuid', 0, 'patch size')
+cmd:option('--gpuid', 1, 'patch size')
 cmd:option('--seed', 123, 'patch size')
 
 -- checkpoint options
-cmd:option('--plotDir', '/home/saxiao/oir/plot/res512/', 'plot directory')
-cmd:option('--checkpointDir', '/home/saxiao/oir/checkpoint/res512/', 'checkpoint directory')
+cmd:option('--plotDir', "/home/saxiao/oir/plot/" .. resolution .. "/", 'plot directory')
+cmd:option('--checkpointDir', "/home/saxiao/oir/checkpoint/" .. resolution .. "/", 'checkpoint directory')
 
 local opt = cmd:parse(arg)
 
