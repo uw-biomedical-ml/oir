@@ -4,11 +4,12 @@ require 'image'
 local utils = require 'utils'
 
 local N = 10
+local cntStart = 0
 local mode = 'simple'
 local resolution = "res256"
 local dataDir = "/home/saxiao/oir/data/" .. resolution .. "/train/"
-local outputDir = "/home/saxiao/oir/data/" .. resolution .. "/augment/train/"
-local plotDir = "/home/saxiao/oir/data/" .. resolution .. "/augment/train/plot/"
+local outputDir = "/home/saxiao/oir/data/" .. resolution .. "/augment/11x/train/"
+local plotDir = "/home/saxiao/oir/data/" .. resolution .. "/augment/11x/train/plot/"
 
 local function rotateImage(raw, label, imageFileRoot)
   local theta = torch.uniform(0, 2 * math.pi)
@@ -24,16 +25,20 @@ end
 local function generate()
   local stats = torch.load(dataDir .. "/stats.t7")
   local nfiles = stats.nfiles
-  local cnt = 0
+  local cnt = cntStart
   for f = 1, nfiles do
     print(f)
     local fileData = torch.load(string.format("%s%d.t7", dataDir, f))
+    cnt = cnt + 1
+    local data = fileData
+    data.theta = 0
+    torch.save(string.format("%s%d.t7", outputDir, cnt), data)
     local raw, label = fileData.raw, fileData.label
     for i = 1, N do
       cnt = cnt + 1
       local imageFileRoot = string.format("%s%d", plotDir, f)
       local rawRotated, labelRotated, theta = rotateImage(raw, label)
-      local data = {}
+      data = {}
       data.raw = rawRotated
       data.label = labelRotated
       data.theta = theta

@@ -4,16 +4,17 @@ require 'optim'
 require 'image'
 
 local model = require 'model'
-local resolution = "res256/augment"
-
+local resolution = "res256/augment/11x"
+local rootDir = "/home/saxiao/oir/"
 local cmd = torch.CmdLine()
-cmd:option('--trainData', "/home/saxiao/oir/data/" .. resolution .. "/train/", 'data directory')
+cmd:option('--trainData', rootDir .. "data/" .. resolution .. "/train/", 'data directory')
+cmd:option('--testData', rootDir .. "data/res256/test/", 'test data directory')
 cmd:option('--nClasses', 2, 'number of classes')
 cmd:option('--trainSize', 0.8, 'training set percentage')
 cmd:option('--batchSize', 32, 'batch size')
 
 -- training options
-cmd:option('--maxEpoch', 1000, 'maxumum epochs to train')
+cmd:option('--maxEpoch', 200, 'maxumum epochs to train')
 cmd:option('--learningRate', 1e-2, 'starting learning rate')
 cmd:option('--minLearningRate', 1e-7, 'minimum learning rate')
 cmd:option('--momentum', 0.9, 'patch size')
@@ -25,12 +26,12 @@ cmd:option('--plotTraining', false, 'plot predictions during training')
 cmd:option('--plotValidate', false, 'plot predictions during training')
 
 -- gpu options
-cmd:option('--gpuid', 1, 'patch size')
+cmd:option('--gpuid', 0, 'patch size')
 cmd:option('--seed', 123, 'patch size')
 
 -- checkpoint options
-cmd:option('--plotDir', "/home/saxiao/oir/plot/" .. resolution .. "/", 'plot directory')
-cmd:option('--checkpointDir', "/home/saxiao/oir/checkpoint/" .. resolution .. "/", 'checkpoint directory')
+cmd:option('--plotDir', rootDir .. "plot/" .. resolution .. "/", 'plot directory')
+cmd:option('--checkpointDir', rootDir .. "checkpoint/" .. resolution .. "/", 'checkpoint directory')
 
 local opt = cmd:parse(arg)
 
@@ -241,10 +242,11 @@ local function validate()
 end
 
 local lr = opt.learningRate
-local optimOpt = {learningRate = lr, momentum = opt.momentum}
+local optimOpt = {learningRate = lr}
 while epoch <= opt.maxEpoch do
   currentIter = currentIter + 1
-  local _, loss = optim.adagrad(feval, params, optimOpt)
+--  local _, loss = optim.adagrad(feval, params, optimOpt)
+  local _, loss = optim.adam(feval, params, optimOpt)
   print("iter=", currentIter, " loss=", loss[1])
   
   if trainIter.epoch == epoch then
@@ -273,7 +275,7 @@ while epoch <= opt.maxEpoch do
     
     collectgarbage()
   end
-  if lr > opt.minLearningRate and opt.learningDecayRate and opt.learningDecayRate > 0 then
-    lr = lr * (1 - opt.learningDecayRate)
-  end
+--  if lr > opt.minLearningRate and opt.learningDecayRate and opt.learningDecayRate > 0 then
+--    lr = lr * (1 - opt.learningDecayRate)
+--  end
 end

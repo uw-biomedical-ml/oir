@@ -8,16 +8,19 @@ require 'cunn'
 require 'cutorch'
 require 'image'
 
-cutorch.setDevice(2) -- note +1 to make it 0 indexed! sigh lua
+cutorch.setDevice(1) -- note +1 to make it 0 indexed! sigh lua
 cutorch.manualSeed(123)
 
-local resolution = "res512"
-local batchSize = 16
+local nEpochs = 150
+local plotDataFilePrefix = "plotData_res256_11x_"
+local resolution = "res256/augment/11x"
+local batchSize = 32
 local rootDir = "/home/saxiao/oir/"
 local Loader = require 'Loader'
 local opt = {}
---opt.trainData = rootDir .. "data/" .. resolution .. "/train/"
-opt.trainData = rootDir .. "data/train/"
+--opt.nfiles = 9290
+opt.trainData = rootDir .. "data/" .. resolution .. "/train/"
+opt.testData = rootDir .. "data/res256/test/"
 opt.trainSize = 0.8 
 local loader = Loader.create(opt)
 local type = "torch.CudaTensor"
@@ -25,12 +28,14 @@ local classWeight = torch.Tensor({0.2,0.8})
 local criterion = nn.CrossEntropyCriterion()
 criterion = criterion:cuda()
 
-local function plotFigure(fileName, title, x, y1, y2)
+local function plotFigure(fileName, title, x, y1, y2, y3)
   print(fileName)
 --  print(x, y1)
   gnuplot.pngfigure(fileName)
   gnuplot.title(title)
-  if y2 then
+  if y3 then
+    gnuplot.plot({'train', x, y1, '+-'}, {'validate', x, y2, '+-'}, {'test', x, y3, '+-'})
+  elseif y2 then
     gnuplot.plot({'train', x, y1, '+-'}, {'validate', x, y2, '+-'})
   else
     gnuplot.plot({'train', x, y1, '+-'})
@@ -39,10 +44,10 @@ local function plotFigure(fileName, title, x, y1, y2)
   gnuplot.plotflush()
 end
 
-local function plotWithErr(fileName, title, x, y1, y1err, y2, y2err)
-  local file = io.open('plotData.txt', 'w')
+local function plotWithErr(fileName, dataFileName, title, x, y1, y1err, y2, y2err, y3, y3err)
+  local file = io.open(dataFileName, 'w')
   for i=1,x:size(1) do
-    file:write(string.format('%d %f %f %f %f\n', x[i], y1[i], y1err[i], y2[i], y2err[i]))
+    file:write(string.format('%d %f %f %f %f %f %f\n', x[i], y1[i], y1err[i], y2[i], y2err[i], y3[i], y3err[i]))
   end
   io.close(file)
 
@@ -50,7 +55,7 @@ local function plotWithErr(fileName, title, x, y1, y1err, y2, y2err)
   gnuplot.title(title )
 --  gnuplot.raw("plot 'plotData.txt' using 1:2:3: with errorbars, plot 'plotData.txt' using 1:4:5: with errorbars")
   gnuplot.raw("set yrange [0:1]")
-  gnuplot.raw("plot 'plotData.txt' using 1:2:3 with errorlines title 'train', '' using 1:4:5 with errorlines title 'validate'")
+  gnuplot.raw("plot '" .. dataFileName .. "' using 1:2:3 with errorlines title 'train', '' using 1:4:5 with errorlines title 'validate', '' using 1:6:7 with errorlines title 'test'")
   gnuplot.raw('set key right bottom')
   gnuplot.xlabel('epoch')
   gnuplot.plotflush()
@@ -87,8 +92,9 @@ end
 local function evalDiceCoef(files, split, nSample)
   local cnt = 1
   local nfiles = #files
+  if nEpochs > 0 then nfiles = nEpochs end
   local dc = torch.Tensor(nfiles * nSample)
-  local loss = torch.Tensor(nfiles)
+  local loss = torch.Tensor(nfiles * nSample)
   local dataSamples, labelSamples = loader:sample(split, nSample)
   for f = 1, nfiles do
     local file = files[f]
@@ -105,17 +111,19 @@ local function evalDiceCoef(files, split, nSample)
       if iend > nSample then iend = nSample end
       local data = dataSamples[{{istart, iend}}]
       local label = labelSamples[{{istart, iend}}]
-      local nbatch = iend - istart + 1
+      local B = iend - istart + 1
 
       local output = net:forward(data)
-      loss[f] = criterion:forward(output, label:view(label:nElement()))
+      local outputView = output:view(B, -1, 2)
+--      loss[f] = criterion:forward(output, label:view(label:nElement()))
       local _, predict = output:max(2)
       predict = predict:squeeze():type(type)
-      predict = predict:view(nbatch, -1)
-      label = label:view(nbatch, -1)
-      for i = 1, nbatch do
+      predict = predict:view(B, -1)
+      label = label:view(B, -1)
+      for i = 1, B do
         local dice = diceCoef(predict[i], label[i])
         dc[cnt] = dice
+        loss[cnt] = criterion:forward(outputView[i], label[i]) 
         cnt = cnt + 1
       end
     end
@@ -123,8 +131,8 @@ local function evalDiceCoef(files, split, nSample)
   return dc, loss
 end
 
-local function evaluate(dataDir, plotDir, nSamples)
-  local files = getFiles(dataDir)
+local function evaluate(checkpointDir, plotDir, nSamples)
+  local files = getFiles(checkpointDir)
   local dcTrain = evalDiceCoef(files, "train", nSamples)
   local dcValidate = evalDiceCoef(files, "validate", nSamples)
   local nfiles = #files  -- #files
@@ -134,20 +142,35 @@ local function evaluate(dataDir, plotDir, nSamples)
   plotFigure(string.format("%sdice.png", plotDir), "dice coefficient", xEpoch, dcTrain, dcValidate)
 end
 
-local function evaluateErrorbar(dataDir, plotDir, nSamples)
-  local files = getFiles(dataDir)
+local function evaluateErrorbar(checkpointDir, plotDir, nSamples)
+  local files = getFiles(checkpointDir)
   local nfiles = #files
+  if nEpochs > 0 then nfiles = nEpochs end
   local dcTrain, lossTrain = evalDiceCoef(files, "train", nSamples)
   local dcValidate, lossValidate = evalDiceCoef(files, "validate", nSamples)
+  local dcTest, lossTest = evalDiceCoef(files, "test", nSamples)
   dcTrain = dcTrain:view(nfiles, -1)
   dcValidate = dcValidate:view(nfiles, -1)
+  dcTest = dcTest:view(nfiles, -1)
+  lossTrain = lossTrain:view(nfiles, -1)
+  lossValidate = lossValidate:view(nfiles, -1)
+  lossTest = lossTest:view(nfiles, -1)
   local dcTrainMean = dcTrain:mean(2):view(nfiles)
   local dcTrainStd = dcTrain:var(2):sqrt():view(nfiles)
   local dcValidateMean = dcValidate:mean(2):view(nfiles)
   local dcValidateStd = dcValidate:var(2):sqrt():view(nfiles)
+  local dcTestMean = dcTest:mean(2):view(nfiles)
+  local dcTestStd = dcTest:var(2):sqrt():view(nfiles)
+  local lossTrainMean = lossTrain:mean(2):view(nfiles)
+  local lossTrainStd = lossTrain:var(2):sqrt():view(nfiles)
+  local lossValidateMean = lossValidate:mean(2):view(nfiles)
+  local lossValidateStd = lossValidate:var(2):sqrt():view(nfiles)
+  local lossTestMean = lossTest:mean(2):view(nfiles)
+  local lossTestStd = lossTest:var(2):sqrt():view(nfiles)
   local epoch = torch.linspace(1, nfiles, nfiles)
-  plotWithErr(string.format("%sdice_err.png", plotDir), "dice coef", epoch, dcTrainMean, dcTrainStd, dcValidateMean, dcValidateStd)
-  plotFigure(string.format("%sloss.png", plotDir), "loss", epoch, lossTrain, lossValidate)
+  plotWithErr(string.format("%sdice_err.png", plotDir), string.format("%sdc.txt", plotDataFilePrefix), "dice coef", epoch, dcTrainMean, dcTrainStd, dcValidateMean, dcValidateStd, dcTestMean, dcTestStd)
+  plotWithErr(string.format("%sloss_err.png", plotDir), string.format("%sloss.txt", plotDataFilePrefix), "loss", epoch, lossTrainMean, lossTrainStd, lossValidateMean, lossValidateStd, lossTestMean, lossTestStd)
+--  plotFigure(string.format("%sloss.png", plotDir), "loss", epoch, lossTrain, lossValidate, lossTest)
 end
 
 local function plotPrediction(raw, nnOutput, label, fileNameRoot)
@@ -176,8 +199,8 @@ local function plotPrediction(raw, nnOutput, label, fileNameRoot)
   image.save(trueFile, trueImage)
 end
 
-local function visualizeResult(dataDir, plotDir, split, nSample, epoch)
-  local files = getFiles(dataDir)
+local function visualizeResult(checkpointDir, plotDir, split, nSample, epoch)
+  local files = getFiles(checkpointDir)
   if not epoch then epoch = #files end
   local file = files[epoch]
   local checkpoint = torch.load(file)
@@ -232,6 +255,6 @@ end
 local checkpointDir = rootDir .. "checkpoint/" .. resolution .. "/"
 local plotDir = rootDir .. "plot/" .. resolution .. "/"
 --plotProgress(checkpointDir, plotDir)
-evaluateErrorbar(checkpointDir, plotDir, 100)
---visualizeResult(checkpointDir, plotDir, "train", 20, 133)
---visualizeResult(checkpointDir, plotDir .. "res512/", "validate", 10, 5)
+--evaluateErrorbar(checkpointDir, plotDir, 100)
+visualizeResult(checkpointDir, plotDir, "train", 100, 40)
+visualizeResult(checkpointDir, plotDir, "test", 100, 40)

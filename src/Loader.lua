@@ -8,10 +8,10 @@ function Loader.create(opt)
   local self = {}
   setmetatable(self, Loader)
   
-  self.dataDir = opt.trainData
+  self.trainData= opt.trainData
   local nfiles = opt.nfiles
   if not nfiles or nfiles < 0 then
-    local stats = torch.load(self.dataDir .. "/stats.t7")
+    local stats = torch.load(self.trainData .. "/stats.t7")
     nfiles = stats.nfiles
   end
   self.nfiles = nfiles
@@ -22,16 +22,22 @@ function Loader.create(opt)
   self.set["train"] = all[{{1, trainSize}}]
   self.set["validate"] = all[{{trainSize + 1, nfiles}}]
   self.batchSize = opt.batchSize
-  
+ 
+  self.testData = opt.testData
+  local testStats = torch.load(self.testData .. "/stats.t7")
+  self.ntestFiles = testStats.nfiles
+  self.set["test"] = torch.linspace(1, self.ntestFiles, self.ntestFiles)  
   return self
 end
 
 function Loader:sample(split, nSample)
   print(split, nSample)
+  local dataSet = self.trainData
+  if split == "test" then dataSet = self.testData end
   local data, label = torch.ByteTensor(), torch.ByteTensor()
   local indexes = torch.randperm(nSample)
   for i = 1, nSample do
-     local fileName = self.dataDir .. self.set[split][indexes[i]] .. ".t7"
+     local fileName = dataSet .. self.set[split][indexes[i]] .. ".t7"
      local fileData = torch.load(fileName)
      if data:nElement() == 0 then
         data:resize(nSample, 1, fileData.raw:size(1), fileData.raw:size(2)):zero()
@@ -63,7 +69,7 @@ function Loader:iterator(split)
         fileCursor = 1
         it.epoch = it.epoch + 1
       end
-      local fileName = self.dataDir .. self.set[split][fileCursor] .. ".t7"
+      local fileName = self.trainData .. self.set[split][fileCursor] .. ".t7"
       local fileData = torch.load(fileName)
       if data:nElement() == 0 then
         data:resize(self.batchSize, 1, fileData.raw:size(1), fileData.raw:size(2)):zero()
