@@ -3,8 +3,9 @@
 .settings/
 *.tif
 data/
-plot/exp/
-plot/res512/
+plot/
 checkpoint/
 *.txt
 *.log
+*.t7
+*.swp

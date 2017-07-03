@@ -14,8 +14,11 @@ function Loader.create(opt)
     local stats = torch.load(self.trainData .. "/stats.t7")
     nfiles = stats.nfiles
   end
+   
+  self.originalRawPaths = {train = torch.load("/home/saxiao/oir/data/res256/train/rawPath.t7"), test = torch.load("/home/saxiao/oir/data/res256/test/rawPath.t7")}
+  self.originalLabelPaths = {train = torch.load("/home/saxiao/oir/data/res256/train/labelPath.t7"), test = torch.load("/home/saxiao/oir/data/res256/test/labelPath.t7")}
+  
   self.nfiles = nfiles
---  local all = torch.randperm(nfiles)
   local all = torch.linspace(1, nfiles, nfiles)
   local trainSize = nfiles * opt.trainSize
   self.set = {}
@@ -34,19 +37,32 @@ function Loader:sample(split, nSample)
   print(split, nSample)
   local dataSet = self.trainData
   if split == "test" then dataSet = self.testData end
+  local pathSplit = split == "test" and "test" or "train"
+  local rawPath, labelPath = self.originalRawPaths[pathSplit], self.originalLabelPaths[pathSplit]
   local data, label = torch.ByteTensor(), torch.ByteTensor()
-  local indexes = torch.randperm(nSample)
+  local dataFiles = {}
+  local indexes = nil
+  if nSample < 0 then
+    nSample = self.set[split]:size(1)
+    indexes = torch.linspace(1, nSample, nSample)
+  else
+    indexes = torch.randperm(nSample)
+  end
+  print(split, nSample)
   for i = 1, nSample do
-     local fileName = dataSet .. self.set[split][indexes[i]] .. ".t7"
+     local fileId = self.set[split][indexes[i]]
+     local fileName = dataSet .. fileId .. ".t7"
      local fileData = torch.load(fileName)
      if data:nElement() == 0 then
         data:resize(nSample, 1, fileData.raw:size(1), fileData.raw:size(2)):zero()
         label:resize(nSample, fileData.raw:size(1), fileData.raw:size(2))
      end
      data[i][1] = fileData.raw
-     label[i] = fileData.label     
+     label[i] = fileData.label
+     local pathIdx = split == "test" and fileId or math.ceil(fileId / 11)
+     dataFiles[i] = {raw = rawPath[pathIdx], label = labelPath[pathIdx]}
   end
-  return data, label+1
+  return data, label+1, dataFiles
 end
 
 function Loader:iterator(split)

@@ -1,11 +1,11 @@
+-- TODO: rewrite with torchnet parallel data iterator
 require 'torch'
 require 'image'
 
 local gm = require 'graphicsmagick'
+local utils = require 'utils'
+local imageW, imageH = 256, 256
 
-local rootDir = "/home/saxiao/oir/"
-local labelFileName = string.format("%sdata/labeled.txt", rootDir)
-local rawFileName = string.format("%sdata/raw.txt", rootDir)
 
 local function loadFile(txtFile)
   local t = {}
@@ -26,93 +26,51 @@ local function downSampling(raw, label, w, h, imageFileName)
   local labelDS = image.scale(label, w, h)
   local dlabel = labelDS.new():resizeAs(labelDS):zero()
   dlabel:maskedFill(labelDS:gt(0.5), 1)
+  dlabel:maskedFill(labelDS:gt(1.5), 2)
   if imageFileName then
-    local dlabeledImage = draw.new():resize(3, w, h):zero()
-    dlabeledImage[1]:copy(draw)
-    dlabeledImage[1]:maskedFill(dlabel, 255)
-    dlabeledImage[2]:maskedFill(dlabel, 255)
-    image.save(imageFileName, dlabeledImage)
+    utils.drawImage(imageFileName, draw, dlabel)
   end
 
   return draw, dlabel
 end
 
-local function isGrey(image)
-  local m12 = image[1]:eq(image[2])
-  m12:maskedFill(m12:eq(0), 2)
-  local m23 = image[2]:eq(image[3])
-  local m123 = m12:eq(m23)  -- highlighted = 0, normal+background = 1
-  local m1Not0 = image[1]:ne(0)
-  local m123Not0 = m123:eq(m1Not0)
-  local isGrey = false
-  local labelMask = m123.new():resizeAs(m123):zero()
-  labelMask:maskedFill(m123:eq(0), 1) -- hightlighted = 1, normal+bg = 0
-  if m123Not0:sum() > 0 then
---    print(m123Not0:sum()/m12:size(1)/m12:size(2))
-    isGrey =  true
-    local diff = (image[1]:float():add(-1, image[2]:float())):abs()
-    local redYellowCutoff = 30
-    if diff:max() > redYellowCutoff then
-      -- There are red and yellow highlighted
-      labelMask:zero()
-      labelMask:maskedFill(diff:lt(redYellowCutoff), 1)
-      labelMask:maskedFill(m123, 0)  -- yellow =1, red+normal+bg=0
-    end
-  end
-  return isGrey, labelMask
-end
-
-local labelFile, nLabel = loadFile(labelFileName)
-local rawFile, nRaw = loadFile(rawFileName)
-print(nLabel)
-local trainSetPartition = 0.8
-local nTrainSet = math.ceil(nLabel * trainSetPartition)
-local indexes = torch.randperm(nLabel)
-local imageW, imageH = 512, 512
-
-local function generateImage(iStart, iEnd, outputDir)
-  local rawFilePath, labelFilePath = {}, {}
-  local cnt = 0
-  for i = iStart, iEnd do
-    local rawImage = gm.Image(rawFile[indexes[i]]):toTensor('byte','RGB','DHW')
-    local labelImage = gm.Image(labelFile[indexes[i]]):toTensor('byte','RGB','DHW')
---    print(rawFile[indexes[i]])
---    print(labelFile[indexes[i]])
---    print(rawImage:size(), labelImage:size())
+local function generateData(inputDir, outputDir, split)
+  local rawPathFile = torch.load(string.format("%s%s_raw.t7", inputDir, split))
+  local labelPathFile = torch.load(string.format("%s%s_label.t7", inputDir, split))
+  local data = {}
+--  local rawImages, labels = {}, {}
+--  local rawFilePath, labelFilePath, originalSize = {}, {}, {}
+  local cnt, redCnt = 0, 0
+  for i, rawPath in pairs(rawPathFile) do
+    local rawImage = gm.Image(rawPath):toTensor('byte','RGB','DHW')
+    local labelImage = gm.Image(labelPathFile[i]):toTensor('byte','RGB','DHW')
     if rawImage:size(2) == labelImage:size(2) then
-      print(cnt)
-      local label = rawImage[2]:ne(labelImage[2])  -- yellow = 1, the rest (normal, bg, red possibly) = 0
-      local isGrey, qMask = isGrey(labelImage)
-      if isGrey then
-        label = qMask
-      end
-      
-      table.insert(rawFilePath, rawFile[indexes[i]])
-      table.insert(labelFilePath, labelFile[indexes[i]])
       cnt = cnt + 1
-      local dataFileName = string.format("%s%d.t7", outputDir, cnt)
+      print(cnt)
+      local label = utils.getLabel(rawImage, labelImage) -- bg/normal = 1, yellow = 1, red = 2
+      if label:max() == 2 then
+        redCnt = redCnt + 1
+      end
       local imageFileName = string.format("%splot/%d.png", outputDir, cnt)
       local draw, dlabel = downSampling(rawImage[1], label, imageW, imageH)
-      local data = {}
-      data.originalRawW = rawImage[1]:size(1)
-      data.originalRawH = rawImage[1]:size(2)
-      data.originalLabelW = label:size(1)
-      data.originalLabelH = label:size(2)
-      data.rawImageFile = rawFile[indexes[i]]
-      data.rawLabelFile = labelFile[indexes[i]]
-      data.raw = draw
-      data.label = dlabel
-      torch.save(dataFileName, data)
-
+      data[i] = {input = draw, target = dlabel, rawFilePath = rawPath, labelFilePath = labelPathFile[i], originalSize = {w = label:size(1), h = label:size(2)}}
     end
+    if cnt > 10 then break end
   end
-  local stats = {}
-  stats.nfiles = cnt
-  print(stats.nfiles)
-  torch.save(string.format("%sstats.t7", outputDir), stats)
-  torch.save(string.format("%srawPath.t7", outputDir), rawFilePath)
-  torch.save(string.format("%slabelPath.t7", outputDir), labelFilePath)
+  
+--  local rawData = torch.ByteTensor(#rawImages, 1, imageW, imageH)
+--  local labelData = torch.ByteTensor(#rawImages, imageW, imageH)
+--  for i, v in pairs(rawImages) do
+--    rawData[i][1] = v
+--    labelData[i] = labels[i]
+--  end
+--  local data = {raw = rawData, label = labelData, rawFilePath = rawFilePath, labelFilePath = labelFilePath, originalSize = originalSize}
+  torch.save(string.format("%sres%d/%s.t7", outputDir, imageW, split), data)
+  print(string.format("%s set has total %d, redCnt: %d", split, cnt, redCnt))
 end
 
-generateImage(1, nTrainSet, string.format("%sdata/train/", rootDir))
-generateImage(nTrainSet+1, nLabel, string.format("%sdata/test/", rootDir))
+local dir = "/home/saxiao/oir/data/"
+generateData(dir, dir, "train")
+generateData(dir, dir, "validate")
+generateData(dir, dir, "test")
+
