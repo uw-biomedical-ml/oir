@@ -18,9 +18,9 @@ local function plotFigure(opt)
   gnuplot.plotflush()
 end
 
-local rootDir = "/home/saxiao/oir/plot/red/patch"
+local rootDir = "/home/saxiao/oir/plot/red/"
 local opt = {}
-local modelId = "fromRedOrRetinaNoaug"
+local modelId = "res512"
 local trainFileName = "/home/saxiao/oir/" .. modelId .. "_train.txt"
 local valFileName = "/home/saxiao/oir/" ..modelId .. "_val.txt"
 

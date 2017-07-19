@@ -83,6 +83,48 @@ function model.uNet1(opt)
   return g 
 end
 
+-- biggest receptive field: 318x318
+function model.uNet1For512(opt)
+  local input = - nn.Identity()
+  -- contracting path
+  local c1 = convModule1(input,1,16,3,3,1,1,1,1)  -- receptive field: (1+2) x (1+2)
+  local pool1 = c1 - nn.SpatialMaxPooling(2,2)   -- receptive field: 6x6
+  local c2 = convModule1(pool1,16,16,3,3,1,1,1,1)  -- receptive field: ) 8 x 8
+  local pool2 = c2 - nn.SpatialMaxPooling(2,2)   -- receptive field: 16x16
+  local c3 = convModule1(pool2,16,32,3,3,1,1,1,1) -- receptive field: 18x18
+  local pool3 = c3 - nn.SpatialMaxPooling(2,2)   -- receptive field: 36x36
+  local c4 = convModule1(pool3,32,32,3,3,1,1,1,1) -- 38x38
+  local pool4 = c4 - nn.SpatialMaxPooling(2,2)   -- 76x76
+  local c5 = convModule1(pool4,32,32,3,3,1,1,1,1) -- 78x78
+  local pool5 = c5 - nn.SpatialMaxPooling(2,2)   -- 156x156
+  local c6 = convModule1(pool5,32,64,3,3,1,1,1,1) -- 158x158
+  local pool6 = c6 - nn.SpatialMaxPooling(2,2)  -- 316x316
+  local c7 = convModule1(pool6,64,64,3,3,1,1,1,1)  -- 318x318
+
+  -- expansive path
+  local up1 = c7 - nn.SpatialUpSamplingNearest(2)
+  local c6Mirror = convModule1({up1,c6},64+64,64,3,3,1,1,1,1)
+  local up2 = c6Mirror - nn.SpatialUpSamplingNearest(2)
+  local c5Mirror = convModule1({up2,c5},64+32,32,3,3,1,1,1,1)
+  local up3 = c5Mirror - nn.SpatialUpSamplingNearest(2)
+  local c4Mirror = convModule1({up3,c4},32+32,32,3,3,1,1,1,1)
+  local up4 = c4Mirror - nn.SpatialUpSamplingNearest(2)
+  local c3Mirror = convModule1({up4,c3},32+32,32,3,3,1,1,1,1)
+  local up5 = c3Mirror - nn.SpatialUpSamplingNearest(2)
+  local c2Mirror = convModule1({up5,c2},32+16,16,3,3,1,1,1,1)
+  local up6 = c2Mirror - nn.SpatialUpSamplingNearest(2)
+  local c1Mirror = convModule1({up6,c1},16+16,16,3,3,1,1,1,1)
+
+  -- make the right shape as the input
+  local last = c1Mirror
+               - nn.SpatialConvolutionMM(16,opt.nClasses,1,1,1,1,0,0)
+               - nn.Reshape(opt.nClasses, -1)  -- output batchsize x nClasses x (number of pixels)
+               - nn.Transpose({2,3})  -- output batchsize x (number of pixels) x nClasses
+               - nn.Reshape(-1, opt.nClasses, false) -- output (batchsize* number of pixels) x nClasses
+  local g = nn.gModule({input},{last})
+  return g
+end
+
 function model.uNet1WithLocation(opt)
   local imgInput = - nn.Identity()  -- output: 1x256x256
   -- contracting path

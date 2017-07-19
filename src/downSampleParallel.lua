@@ -60,7 +60,7 @@ local function getDownsampleIter(inputFile)
                 local plotOpt = {idx=idx, originalLabelFile=labelPath, originalRawFile=rawPath}
                 input, target = downSampling(rawImage[1], label, imageW, imageH)
               end
-              return {input = input, target = label, rawFilePath = rawPath, labelFilePath = labelPath, originalSize = {w = label:size(1), h = label:size(2)}, hasRed = hasRed}
+              return {input = input, target = target, rawFilePath = rawPath, labelFilePath = labelPath, originalSize = {w = label:size(1), h = label:size(2)}, hasRed = hasRed}
             else
               return nil
             end
@@ -103,6 +103,6 @@ local function generate(split)
 end
 
 generate("train")
-generate("validate")
+--generate("validate")
 generate("test")
 

@@ -5,9 +5,10 @@ require 'optim'
 require 'image'
 
 local model = require 'model'
-local resolution = "res256"
+local resolution = "res512"
 local rootDir = "/home/saxiao/oir/"
-local modelId = "fromRedOrRetinaNoaug"
+local modelId = "res512"
+local checkpointEpoch, checkpointIter = 530, 45580  -- 221300
 local cmd = torch.CmdLine()
 cmd:option('--trainData', rootDir .. "data/" .. resolution .. "/train/", 'data directory')
 cmd:option('--testData', rootDir .. "data/res256/test/", 'test data directory')
@@ -17,6 +18,10 @@ cmd:option('--batchSize', 8, 'batch size')
 cmd:option('--targetLabel', 2, 'target label, yellow is 1, red is 2')
 cmd:option('--useLocation', false, 'add location in the input')
 
+cmd:option('--model', '/home/saxiao/oir/checkpoint/red/' .. modelId .. '/epoch_' .. checkpointEpoch .. '_iter_' .. checkpointIter .. '.t7', 'a checkpoint file')
+cmd:option('--trainPatch', false, 'train by randomly selecting a patch from the original image')
+cmd:option('--includeControl', false, 'including the control images')
+cmd:option('--patchSize', 256, 'size of the patch')
 cmd:option('--dataDir', string.format("%sdata/%s/", rootDir, resolution), 'data directory')
 cmd:option('--highRes', '/home/saxiao/oir/data/res2048/', 'high resolution label directory')
 cmd:option('--fullSizeDataDir', '/home/saxiao/oir/data/fullres', 'full size data directory')
@@ -42,7 +47,7 @@ cmd:option('--seed', 123, 'patch size')
 -- checkpoint options
 cmd:option('--plotDir', rootDir .. "plot/" .. resolution .. "/augment/online/", 'plot directory')
 --cmd:option('--checkpointDir', rootDir .. "checkpoint/" .. resolution .. "/augment/online/yellow/control_0.5/", 'checkpoint directory')
-cmd:option('--checkpointDir', rootDir .. "checkpoint/red/patch/" .. modelId .. "/", 'checkpoint directory')
+cmd:option('--checkpointDir', rootDir .. "checkpoint/red/" .. modelId .. "/", 'checkpoint directory')
 
 local opt = cmd:parse(arg)
 
@@ -70,10 +75,17 @@ local Loader = require 'OnlineLoader'
 local loader = Loader.create(opt)
 
 local net = nil
-if opt.useLocation then
-  net = model.uNet1WithLocation(opt)
+if opt.model then
+  local cp = torch.load(opt.model)
+  net = cp.model
+  optimOpt = cp.optimOpt
 else
-  net = model.uNet1(opt)
+  if opt.useLocation then
+    net = model.uNet1WithLocation(opt)
+  else
+    net = model.uNet1For512(opt)
+  end
+  optimOpt = {learningRate = opt.learningRate}
 end
 
 -- TODO: use cross validation to determine?
@@ -89,8 +101,8 @@ end
 local params, grads = net:getParameters()
 local type = net:type()
 
-local currentIter = 0
-local epoch = 1
+local currentIter = 0 + checkpointIter
+--local epoch = 1
 local function calHits(output, target)
   local _, predict = output:max(2)
   predict = predict:squeeze():type(type)
@@ -262,11 +274,11 @@ local feval = function(w)
     net:backward(data, dloss)
   end
   
-  if opt.plotTraining and trainIter.epoch == epoch then
-    print("true highlighted = ", label:eq(2):sum()/label:nElement())
-    local d, o, l = data[{{},1}]:type(originalType), output:float(), label:type(originalType)
-    plotPrediction(d, o, l, "train")
-  end
+  --if opt.plotTraining and trainIter.epoch == epoch then
+  --  print("true highlighted = ", label:eq(2):sum()/label:nElement())
+  --  local d, o, l = data[{{},1}]:type(originalType), output:float(), label:type(originalType)
+  --  plotPrediction(d, o, l, "train")
+  --end
  
   --local trainHistoryFile = io.open(string.format("%s_train.txt", opt.historyFilePrefix), 'a')
   --local toLog = string.format("%d %.3f %.3f\n", currentIter, loss, dice)
@@ -276,13 +288,9 @@ local feval = function(w)
   return loss, grads
 end
 
-local function validate()
-   --local validateIter = loader:iterator("validate", {augment = true, classId = 2, highResLabel=opt.highRes})
-  local nSample = 100
-  --local validateIter = loader:iterator("validate", {addControl = true, augment = true, classId = opt.targetLabel, nSample = nSample})
-  local validateIter = loader:iteratorRandomPatch("validate", {fullSizeDataDir = opt.fullSizeDataDir, nFiles = nFiles, augment = false, classId = opt.targetLabel})
+local function validateForIter(iter)
   local loss, dice, b = 0, 0, 0
-  for batch in validateIter() do
+  for batch in iter() do
     local input, target = batch.input:type(type), batch.target:type(type)
     local output = nil
     if opt.useLocation then
@@ -296,6 +304,10 @@ local function validate()
     loss = loss + criterion:forward(output, targetView)
     b = b + 1
   end
+  return loss, dice, b
+end
+
+local function writeToValidateLog(loss, dice, b)
   local validateFile = io.open(string.format("%s_val.txt", opt.historyFilePrefix), 'a')
   local toLog = string.format("%d %0.3f %0.3f\n", currentIter, loss/b, dice/b)
   --print(toLog)
@@ -303,45 +315,101 @@ local function validate()
   io.close(validateFile)
 end
 
-local lr = opt.learningRate
-local optimOpt = {learningRate = lr}
---local trainIter = loader:iterator("train", {augment = true, classId = 2, highResLabel=opt.highRes})
---local trainIter = loader:iterator("train", {addControl = true, augment = true, classId = opt.targetLabel})
-local trainIter = loader:iteratorRandomPatch("train", {fullSizeDataDir = opt.fullSizeDataDir, nFiles = nFiles, augment = false, classId = opt.targetLabel})
-for epoch = 1, opt.maxEpoch do
-  local loss = nil
-  for batchData in trainIter() do
-    currentIter = currentIter + 1
-    sample = batchData
-    --_, loss = optim.adagrad(feval, params, optimOpt)
-    _, loss = optim.adam(feval, params, optimOpt)
-    --print("iter=", currentIter, " loss=", loss[1])
-    if currentIter % opt.validateEvery == 0 then
-      validate()
-    end
-    if currentIter % opt.trainAverageEvery == 0 then
-      local trainFile = io.open(string.format("%s_train.txt", opt.historyFilePrefix), 'a')
-      local toLog = string.format("%d %0.3f %0.3f\n", currentIter, torch.Tensor(trainLoss):mean(), torch.Tensor(trainDC):mean())
-      --print(toLog)
-      trainFile:write(toLog)
-      io.close(trainFile)
-      trainLoss = {}
-      trainDC = {}
-    end
-    collectgarbage()
+local function validate()
+   --local validateIter = loader:iterator("validate", {augment = true, classId = 2, highResLabel=opt.highRes})
+  local nSample = 100
+  local validateIter = loader:iterator("validate", {addControl = opt.includeControl, augment = false, classId = opt.targetLabel})
+  local loss, dice, b = validateForIter(validateIter)
+  writeToValidateLog(loss, dice, b)
+end
+
+local function validatePatch()
+  local loss, dice, b = 0, 0, 0
+  for i=1, nFiles.validate do
+    local fileName = string.format("%s/validate/%d.t7", opt.fullSizeDataDir, i)
+    local data = torch.load(fileName)
+    local validateIter = loader:iteratorRandomPatch(data, {augment = false, classId = opt.targetLabel, patchSize = opt.patchSize})
+    local iloss, idice, ib = validateForIter(validateIter)
+    loss = loss + iloss
+    dice = dice + idice
+    b = b + ib
   end
-  if epoch < 100 or epoch % opt.saveModelEvery == 0 then
-    local checkpoint = {}
-    checkpoint.epoch = epoch
-    checkpoint.iter = currentIter
-    checkpoint.loss = loss[1]
-    checkpoint.optimOpt = optimOpt
-    net:clearState()
-    checkpoint.model = net
-    local fileName = string.format("%sepoch_%d.t7",opt.checkpointDir, epoch)
-    torch.save(fileName, checkpoint)
-  
-    --collectgarbage()
+  writeToValidateLog(loss, dice, b)
+end
+
+local function checkAndSaveMetrics()
+  if currentIter % opt.trainAverageEvery == 0 then
+    local trainFile = io.open(string.format("%s_train.txt", opt.historyFilePrefix), 'a')
+    local toLog = string.format("%d %0.3f %0.3f\n", currentIter, torch.Tensor(trainLoss):mean(), torch.Tensor(trainDC):mean())
+    --print(toLog)
+    trainFile:write(toLog)
+    io.close(trainFile)
+    trainLoss = {}
+    trainDC = {}
   end
 end
 
+local function saveCheckpoint(epoch, loss)
+  local checkpoint = {}
+  checkpoint.epoch = epoch
+  checkpoint.iter = currentIter
+  checkpoint.loss = loss[1]
+  checkpoint.optimOpt = optimOpt
+  net:clearState()
+  checkpoint.model = net
+  local fileName = string.format("%sepoch_%d_iter_%d.t7",opt.checkpointDir, epoch, currentIter)
+  torch.save(fileName, checkpoint)
+end
+
+local function trainWholeImg()
+  --local trainIter = loader:iterator("train", {augment = true, classId = 2, highResLabel=opt.highRes})
+  local trainIter = loader:iterator("train", {addControl = opt.includeControl, augment = true, classId = opt.targetLabel})
+  for epoch = 1+checkpointEpoch, opt.maxEpoch+checkpointEpoch do
+    local loss = nil
+    for batchData in trainIter() do
+      currentIter = currentIter + 1
+      sample = batchData
+      --_, loss = optim.adagrad(feval, params, optimOpt)
+      _, loss = optim.adam(feval, params, optimOpt)
+      --print("iter=", currentIter, " loss=", loss[1])
+      if currentIter % opt.validateEvery == 0 then
+        validate()
+      end
+      checkAndSaveMetrics()
+      collectgarbage()
+    end
+    if epoch < 100 or epoch % opt.saveModelEvery == 0 then
+      saveCheckpoint(epoch, loss)
+    end
+  end
+end
+
+local function trainPatch()
+  for epoch = 1+checkpointEpoch, opt.maxEpoch+checkpointEpoch do
+    local loss = nil
+    for i = 1, nFiles.train do
+      local fileName = string.format("%s/train/%d.t7", opt.fullSizeDataDir, i)
+      local data = torch.load(fileName)
+      local trainIter = loader:iteratorRandomPatch(data, {augment=false, classId = opt.targetLabel, patchSize = opt.patchSize})
+      for batchData in trainIter() do
+        currentIter = currentIter + 1
+        sample = batchData
+        _, loss = optim.adam(feval, params, optimOpt)
+        if currentIter % opt.validateEvery == 0 then
+          validatePatch()
+        end
+        checkAndSaveMetrics()
+        collectgarbage()        
+      end
+    end
+    if epoch < 100 or epoch % opt.saveModelEvery == 0 then
+      saveCheckpoint(epoch, loss)
+    end
+  end
+end
+
+if opt.trainPatch then
+  trainPatch()
+else
+  trainWholeImg()
+end

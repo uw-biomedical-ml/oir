@@ -11,9 +11,11 @@ function Loader.create(opt)
   self.nThread = opt.nThread or 4
   self.batchSize = opt.batchSize or 32
   self.var = opt.var or 0.3
-  self.controlData = torch.load(string.format("%scontrol.t7", self.dataDir))
-  local list = torch.range(1, #self.controlData)  -- 24
-  self.controlDataList = {train=list[{{1,16}}], validate=list[{{17,20}}], test=list[{{21,24}}]}
+  if opt.includeControl then  
+    self.controlData = torch.load(string.format("%scontrol.t7", self.dataDir))
+    local list = torch.range(1, #self.controlData)  -- 24
+    self.controlDataList = {train=list[{{1,16}}], validate=list[{{17,20}}], test=list[{{21,24}}]}
+  end
   self.coords = {}
   return self
 end
@@ -94,9 +96,13 @@ local function normalize(x, size)
   return (x / size) * 2 - 1
 end
 
-function Loader:iteratorRandomPatch(split, opt)
-  local dataDir = string.format("%s/%s", opt.fullSizeDataDir, split)
-  local nFiles = opt.nFiles[split]
+function Loader:iteratorRandomPatch(data, opt)
+  --local dataDir = string.format("%s/%s", opt.fullSizeDataDir, split)
+  --local nFiles = opt.nFiles[split]
+  local rawImage = data.input
+  local label = data.target
+  local coords = getCoords(self.coords, rawImage:size(1))
+  local nPatches = opt.nPatches and opt.nPatches or 64
   return tnt.ParallelDatasetIterator{
     nthread = self.nThread,
     ordered = opt.ordered and opt.ordered or false,
@@ -105,7 +111,8 @@ function Loader:iteratorRandomPatch(split, opt)
       require 'image'
     end,
     closure = function()
-      local list = torch.randperm(nFiles):long()
+      --local list = torch.randperm(nFiles):long()
+      local list = torch.range(1, nPatches):long()
       local patchSize = opt.parchSize and opt.patchSize or 256
       --local margin = opt.margin and opt.margin or 50
       return tnt.BatchDataset{   
@@ -113,11 +120,11 @@ function Loader:iteratorRandomPatch(split, opt)
         dataset = tnt.ListDataset{
           list = list,
           load = function(idx)
-            local data = torch.load(string.format("%s/%d.t7", dataDir, idx))
-            local rawImage = data.input
-            local label = data.target
+            --local data = torch.load(string.format("%s/%d.t7", dataDir, idx))
+            --local rawImage = data.input
+            --local label = data.target
             local category = math.random()
-            local coords = getCoords(self.coords, rawImage:size(1))
+            --local coords = getCoords(self.coords, rawImage:size(1))
             local selectFrom = nil
             if category < 0.5 then
               -- pick one from the reds 
@@ -130,9 +137,6 @@ function Loader:iteratorRandomPatch(split, opt)
             --print(ch, cw)
             local hstart= calStartPoint(ch, patchSize, label:size(1))
             local wstart = calStartPoint(cw, patchSize, label:size(2)) 
-            --local minH, maxH = math.ceil(patchSize/2)+margin, rawImage:size(1)-math.ceil(patchSize/2)-margin
-            --local minW, maxW = math.ceil(patchSize/2)+margin, rawImage:size(2)-math.ceil(patchSize)-margin
-            --local hstart, wstart = torch.random(minH, maxH) - math.floor(patchSize/2), torch.random(minW, maxW)-math.floor(patchSize/2)
             local sample = {}
             sample.input = rawImage:sub(hstart, hstart+patchSize-1, wstart, wstart+patchSize-1)
             sample.target = label:sub(hstart, hstart+patchSize-1, wstart, wstart+patchSize-1)
@@ -166,10 +170,9 @@ end
 
 
 function Loader:iterator(split, opt)
-  print("classId", opt.classId)
-  print("ordered", opt.ordered)
+  --print("classId", opt.classId)
+  --print("ordered", opt.ordered)
   local dataSet = torch.load(string.format("%s%s.t7", self.dataDir, split))
-  local controlDataList = self.controlDataList[split]
   --print(string.format("highResLabel: %s", opt.highResLabel))
   return tnt.ParallelDatasetIterator{
     nthread = self.nThread,
@@ -219,6 +222,7 @@ function Loader:iterator(split, opt)
     end,
     transform = function(batch)
       if opt.addControl and split ~= 'control' then
+      local controlDataList = self.controlDataList[split]
         local list = torch.randperm(controlDataList:size(1))
         if split == 'train' then
           local controlRatio = 1/2  -- 1/6

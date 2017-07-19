@@ -1,10 +1,10 @@
 require 'lfs'
 require 'gnuplot'
 
-local dirRoot = "/home/saxiao/oir/plot/res256/augment/online/yellow/"
+local dirRoot = "/home/saxiao/oir/plot/red/res512/"
 local dataDir = dirRoot .. "test/sorted/"
-local nbins = 40
-local isUpsampled = true
+local nbins = 20
+local isUpsampled = false
 
 local function findVal(file, key, istart, iend)
   local i, j = string.find(file, key)
@@ -25,31 +25,33 @@ for file in lfs.dir(dataDir) do
   if lfs.attributes(dataDir .. file, "mode") == "file" and string.match(file, '_p_') then
     if isUpsampled then
       if string.match(file, 'upsampled') then
-        --table.insert(vals, findDiceVal(file, 'upsampled'))
-        table.insert(vals, findRatioVal(file, 'upsampled'))
+        table.insert(vals, findDiceVal(file, 'upsampled'))
+        --table.insert(vals, findRatioVal(file, 'upsampled'))
       end
     else
       if not string.match(file, 'upsampled') then
-        --table.insert(vals, findDiceVal(file, '_p'))
-        table.insert(vals, findRatioVal(file, '_p'))
+        table.insert(vals, findDiceVal(file, '_p'))
+        --table.insert(vals, findRatioVal(file, '_p'))
       end
     end
   end
 end
 
+print(#vals)
 local valsVec = torch.Tensor(#vals)
 for i, d in pairs(vals) do
-  print(d)
+  --print(d)
   valsVec[i] = d
 end
 
 print(valsVec:min(), valsVec:max())
-local keyword = "areaRatio"
+local keyword = "dice"
 local fileName = dirRoot .. keyword .. "HistTestSet.png"
 if isUpsampled then fileName = dirRoot .. keyword .. "HistTestSet_upsampled.png" end
 gnuplot.pngfigure(fileName)
-gnuplot.title(isUpsampled and "Predicted area/True area histogram for the test set (upsampled)" or "Predicted area/True area histogram for the test set")
---gnuplot.raw("set xrange [0:2]")
-gnuplot.hist(valsVec, nbins, 0, 2)
+gnuplot.title(isUpsampled and "dice histogram for the test set (upsampled)" or "dice histogram for the test set")
+gnuplot.hist(valsVec, nbins)
+--gnuplot.title(isUpsampled and "Predicted area/True area histogram for the test set (upsampled)" or "Predicted area/True area histogram for the test set")
+gnuplot.hist(valsVec, nbins, 0, 1)
 gnuplot.plotflush()
 

@@ -15,19 +15,22 @@ cutorch.manualSeed(123)
 
 local eps = 1
 local cmd = torch.CmdLine()
-cmd:option('--dataDir', '/home/saxiao/oir/data/res256/', 'data directory')
-cmd:option('--split', 'control', 'split')
-cmd:option('--checkpointDir', '/home/saxiao/oir/checkpoint/res256/augment/online/yellow/control_0.5/', 'checkpoint directory')
-cmd:option('--plotDir', '/home/saxiao/oir/plot/res256/augment/online/yellow/control_0.5/', 'plot directory')
-cmd:option('--epoch', 1000, 'start epoch')
+cmd:option('--dataDir', '/home/saxiao/oir/data/res512/', 'data directory')
+cmd:option('--split', 'test', 'split')
+cmd:option('--checkpointDir', '/home/saxiao/oir/checkpoint/red/res512/', 'checkpoint directory')
+cmd:option('--plotDir', '/home/saxiao/oir/plot/red/res512/', 'plot directory')
+cmd:option('--epoch', 700, 'start epoch')
+cmd:option('--iter', 60200, 'start iter')
 cmd:option('--batchSize', 32, 'batch size')
 cmd:option('--nSamples', -1, 'number of samples to draw for evaluation')
-cmd:option('--targetLabel', 1, 'label for the target class, yellow = 1, red = 2')
+cmd:option('--targetLabel', 2, 'label for the target class, yellow = 1, red = 2')
 local opt = cmd:parse(arg)
-
+local sorted = true
+local plotOriginal = false
 local utils = require 'utils'
 
-local checkpoint = torch.load(string.format("%sepoch_%s.t7", opt.checkpointDir, opt.epoch))
+--local checkpoint = torch.load(string.format("%sepoch_%s.t7", opt.checkpointDir, opt.epoch))
+local checkpoint = torch.load(string.format("%sepoch_%s_iter_%d.t7", opt.checkpointDir, opt.epoch, opt.iter))
 local net = checkpoint.model
 local type = net:type()
 
@@ -69,8 +72,8 @@ for data in iter() do
   local outputView = output:view(batchSize, downsampleW, downsampleH, -1)
   for i = 1, dice:size(1) do
     cnt = cnt + 1
-    print(data.idx[i])
-    local fileNameRoot = string.format("%s%s/epoch_%d_%d", opt.plotDir, opt.split, opt.epoch, data.idx[i])
+    print(cnt, data.idx[i])
+    local fileNameRoot = string.format("%s%s/epoch_%d_%d", opt.plotDir, opt.split, opt.epoch, cnt)
     local downRawFile = string.format("%s_r.png", fileNameRoot)
     utils.drawImage(downRawFile, input[i][1]:type(dataOriginalType))
     local dRetinaArea = utils.getRetinaArea(input[i][1])
@@ -110,7 +113,7 @@ for data in iter() do
     local upPredictFile = string.format("%s_upsampled_%0.3f_%0.3f_%0.3f.png", fileNameRoot, upsampledDc, (upPredictArea+eps)/(upRetinaArea+eps), (upPredictArea+eps)/(upTrueArea+eps))
     utils.drawImage(upPredictFile, originalRawImage[1], upsamplePredictDraw)
 
-    entries[cnt] = {idx = data.idx[i], downRawFile = downRawFile, downTrueFile = downTrueFile, downPredictFile = downPredictFile, upPredictFile = upPredictFile, originalRawFile = data.rawFilePath[i], originalLabelFile = data.labelFilePath[i], dc = dice[i], upsampledDc = upsampledDc, dTrueArea=dTrueArea, dPredictArea=dPredictArea, dRetinaArea=dRetinaArea,upTrueArea=upTrueArea, upPredictArea=upPredictArea, upRetinaArea=upRetinaArea}
+    entries[cnt] = {idx = cnt, downRawFile = downRawFile, downTrueFile = downTrueFile, downPredictFile = downPredictFile, upPredictFile = upPredictFile, originalRawFile = data.rawFilePath[i], originalLabelFile = data.labelFilePath[i], dc = dice[i], upsampledDc = upsampledDc, dTrueArea=dTrueArea, dPredictArea=dPredictArea, dRetinaArea=dRetinaArea,upTrueArea=upTrueArea, upPredictArea=upPredictArea, upRetinaArea=upRetinaArea}
   end
 end
 
@@ -124,18 +127,26 @@ table.sort(entries, compareDice)
 for k, entry in pairs(entries) do
   local sortedFileRoot = string.format("%s%s/sorted/epoch_%d_", opt.plotDir, opt.split, opt.epoch)
   local sortedRaw = string.format("%s%d_r_%d.png", sortedFileRoot, k, entry.idx)
-  os.rename(entry.downRawFile,sortedRaw)
+  os.execute("cp \"" .. entry.downRawFile .. "\" \"" .. sortedRaw .. "\"")
+  --os.rename(entry.downRawFile,sortedRaw)
   local sortedPredict = string.format("%s%d_p_%.3f_%.3f_%0.3f.png", sortedFileRoot, k, entry.dc, (entry.dPredictArea+eps)/(entry.dRetinaArea+eps), (entry.dPredictArea+eps)/(entry.dTrueArea+eps))
-  os.rename(entry.downPredictFile, sortedPredict)
+  os.execute("cp \"" .. entry.downPredictFile .. "\" \"" .. sortedPredict .. "\"")
+  --os.rename(entry.downPredictFile, sortedPredict)
   local sortedUpsample = string.format("%s%d_p_upsampled_%0.3f_%.3f_%.3f.png", sortedFileRoot, k, entry.upsampledDc, (entry.upPredictArea+eps)/(entry.upRetinaArea+eps), (entry.upPredictArea+eps)/(entry.upTrueArea+eps))
-  os.rename(entry.upPredictFile, sortedUpsample)
+  os.execute("cp \"" .. entry.upPredictFile .. "\" \"" .. sortedUpsample .. "\"")
+  --os.rename(entry.upPredictFile, sortedUpsample)
   if opt.split ~= 'control' then
     local sortedTrue = string.format("%s%d_t_%.3f.png", sortedFileRoot, k, (entry.dTrueArea+eps)/(entry.dRetinaArea+eps))
-    os.rename(entry.downTrueFile, sortedTrue)
-    local sortedOriginalLabel = string.format("%s%d_t_original_%.3f.png", sortedFileRoot, k, (entry.upTrueArea+eps)/(entry.upRetinaArea+eps))
-    os.execute("cp \"" .. entry.originalLabelFile .. "\" \"" .. sortedOriginalLabel .. "\"")
+    os.execute("cp \"" .. entry.downTrueFile .. "\" \"" .. sortedTrue .. "\"")
+    --os.rename(entry.downTrueFile, sortedTrue)
+    if plotOriginal then
+      local sortedOriginalLabel = string.format("%s%d_t_original_%.3f.png", sortedFileRoot, k, (entry.upTrueArea+eps)/(entry.upRetinaArea+eps))
+      os.execute("cp \"" .. entry.originalLabelFile .. "\" \"" .. sortedOriginalLabel .. "\"")
+    end
   end
-  local sortedOriginalRaw = string.format("%s%d_r_original.png", sortedFileRoot, k)
-  os.execute("cp \"" .. entry.originalRawFile .. "\" \"" .. sortedOriginalRaw .. "\"")
+  if plotOriginal then
+    local sortedOriginalRaw = string.format("%s%d_r_original.png", sortedFileRoot, k)
+    os.execute("cp \"" .. entry.originalRawFile .. "\" \"" .. sortedOriginalRaw .. "\"")
+  end
 end
 end

@@ -15,18 +15,20 @@ cutorch.manualSeed(123)
 
 local cmd = torch.CmdLine()
 cmd:option('--dataDir', '/home/saxiao/oir/data/res256/', 'data directory')
-cmd:option('--checkpointDir', '/home/saxiao/oir/checkpoint/res256/augment/online/', 'checkpoint directory')
-cmd:option('--plotDir', '/home/saxiao/oir/plot/res256/augment/online/red/', 'plot directory')
+cmd:option('--checkpointDir', '/home/saxiao/oir/checkpoint/red/res512/', 'checkpoint directory')
+cmd:option('--plotDir', '/home/saxiao/oir/plot/red/res512/', 'plot directory')
 cmd:option('--split', 'test', 'batch size')
-cmd:option('--epoch', 200, 'start epoch')
+cmd:option('--epoch', 700, 'start epoch')
+cmd:option('--iter', 60200, 'start iter')
 cmd:option('--batchSize', 32, 'batch size')
 cmd:option('--nSamples', 2, 'number of samples to draw for evaluation')
-cmd:option('--nThread', 1, 'number of threads')
+cmd:option('--nThread', 4, 'number of threads')
 local opt = cmd:parse(arg)
 
 local utils = require 'utils'
 
-local checkpoint = torch.load(string.format("%sepoch_%s.t7", opt.checkpointDir, opt.epoch))
+--local checkpoint = torch.load(string.format("%sepoch_%s.t7", opt.checkpointDir, opt.epoch))
+local checkpoint = torch.load(string.format("%sepoch_%s_iter_%d.t7", opt.checkpointDir, opt.epoch, opt.iter))
 local net = checkpoint.model
 local type = net:type()
 
