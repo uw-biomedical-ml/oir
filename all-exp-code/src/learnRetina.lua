@@ -49,6 +49,28 @@ local function isRetinaBoundary(rgb)
   return rgb[3] > 200
 end
 
+local function plotRetina()
+local rawPath = "/home/saxiao/tmp/retina-1.tif"
+local rawImg = gm.Image(rawPath):toTensor('byte','RGB','DHW')
+local labelPath = "/home/saxiao/tmp/retina-label-1.tif"
+local labelImg = gm.Image(labelPath):toTensor('byte', 'RGB', 'DHW')
+--local retinaLabel = utils.fillContour(labelImg, isRetinaBoundary)
+--local retinaLabel = utils.fillDfs(labelImg, isRetinaBoundary)
+local retinaLabelFile = string.format("%s/%d_label.t7", dataDir, plotId)
+--torch.save(retinaLabelFile, retinaLabel)
+local retinaLabel = torch.load(retinaLabelFile)
+local rawFile = string.format("%s/%d.t7", dataDir, plotId)
+torch.save(rawFile, rawImg[1])
+local pName = string.format("%s/%d_filled.png", plotDir, plotId)
+utils.drawImage(pName, rawImg[1], retinaLabel)
+local scale = 1
+local boostRaw = rawImg[1]:new():resizeAs(rawImg[1]):copy(rawImg[1])
+  -- boost the contrast first
+boostRaw = utils.varyContrast(boostRaw, scale)
+local histName = string.format("%s/%d_%.1f.png", plotDir, plotId, scale)
+utils.pixelHist(boostRaw, retinaLabel, histName, {nbins=256, min=0, max=255})
+end
+
 local progress = {}
 local function kmeansCallback(centroid, loss)
   print("centroids", centroid[1][1], centroid[2][1])

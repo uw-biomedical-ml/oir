@@ -42,8 +42,11 @@ function utils.drawRetina(fileName, img2D, label)
   local h, w = img2D:size(1), img2D:size(2)
   local img3D = img2D.new():resize(3, h, w):zero()
   img3D[1]:copy(img2D)
+  --img3D[2]:copy(img2D)
+  --img3D[3]:copy(img2D)
   img3D[1]:maskedFill(label, 255)
   img3D[2]:maskedFill(label, 255)
+  --img3D[3]:maskedFill(label, 0)
   image.save(fileName, img3D)
 end
 
@@ -142,6 +145,7 @@ function utils.fillContour(imgDHW, isBoundaryFunc)
 end
 
 local function fillDfs(imgDHW, isBoundaryFunc, visited, filled, h, w)
+  --print(h, w, isBoundaryFunc(imgDHW[{{1,3},h,w}]), visited[h][w])
   if not isBoundaryFunc(imgDHW[{{1,3},h,w}]) and visited[h][w] == 0 then
     visited[h][w] = 1
     filled[h][w] = 1

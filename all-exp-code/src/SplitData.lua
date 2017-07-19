@@ -22,14 +22,14 @@ end
 
 local dir = "/home/saxiao/oir/data/"
 local rawFile = string.format("%sraw.txt", dir)
-local labelFile = string.format("%slabel.txt", dir)
+local labelFile = string.format("%slabeled.txt", dir)
 local raw, nfiles = loadFile(rawFile)
 local label = loadFile(labelFile)
 local indexes = torch.randperm(nfiles)
 local trainSplit, validateSplit = 0.64, 0.16
 local trainEndIdx = math.ceil(nfiles * trainSplit)
 local validateEndIdx = math.ceil(nfiles * (trainSplit + validateSplit))
-splitData(raw, label, string.format("%strain.t7", dir), indexes[{{1, trainEndIdx}}])
-splitData(raw, label, string.format("%svalidate.t7", dir), indexes[{{trainEndIdx+1, validateIdx}}]
-splitData(raw, label, string.format("%stest.t7", dir), indexes[{{validateIdx+1, nfiles}}] 
+splitData(raw, label, string.format("%strain_path.t7", dir), indexes[{{1, trainEndIdx}}])
+splitData(raw, label, string.format("%svalidate_path.t7", dir), indexes[{{trainEndIdx+1, validateIdx}}]
+splitData(raw, label, string.format("%stest_path.t7", dir), indexes[{{validateIdx+1, nfiles}}] 
 

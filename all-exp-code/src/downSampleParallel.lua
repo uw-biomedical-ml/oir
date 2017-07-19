@@ -102,6 +102,6 @@ local function generate(split)
 end
 
 generate("train")
-generate("validate")
+--generate("validate")
 generate("test")
 
