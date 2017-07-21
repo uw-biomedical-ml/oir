@@ -1,10 +1,10 @@
 require 'lfs'
 require 'gnuplot'
 
-local dirRoot = "/home/saxiao/oir/plot/red/res512/"
+local dirRoot = "/home/saxiao/oir/plot/yellow/"
 local dataDir = dirRoot .. "test/sorted/"
-local nbins = 20
-local isUpsampled = false
+local nbins = 40
+local isUpsampled = true
 
 local function findVal(file, key, istart, iend)
   local i, j = string.find(file, key)

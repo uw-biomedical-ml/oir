@@ -15,24 +15,29 @@ cutorch.manualSeed(123)
 
 local eps = 1
 local cmd = torch.CmdLine()
-cmd:option('--dataDir', '/home/saxiao/oir/data/res512/', 'data directory')
+cmd:option('--dataDir', '/home/saxiao/oir/data/res256/', 'data directory')
 cmd:option('--split', 'test', 'split')
-cmd:option('--checkpointDir', '/home/saxiao/oir/checkpoint/red/res512/', 'checkpoint directory')
-cmd:option('--plotDir', '/home/saxiao/oir/plot/red/res512/', 'plot directory')
-cmd:option('--epoch', 700, 'start epoch')
+cmd:option('--checkpointDir', '/home/saxiao/oir/checkpoint/res256/augment/online/yellow/', 'checkpoint directory')  -- red:"/home/saxiao/oir/checkpoint/red/res512/", yellow: "/home/saxiao/oir/checkpoint/res256/augment/online/yellow/", red(256): '/home/saxiao/oir/checkpoint/res256/augment/online/red/'
+cmd:option('--plotDir', '/home/saxiao/oir/plot/yellow/', 'plot directory')
+cmd:option('--epoch', 150, 'start epoch') -- red(512):700, red(256): 256, yellow: 150
 cmd:option('--iter', 60200, 'start iter')
 cmd:option('--batchSize', 32, 'batch size')
 cmd:option('--nSamples', -1, 'number of samples to draw for evaluation')
-cmd:option('--targetLabel', 2, 'label for the target class, yellow = 1, red = 2')
+cmd:option('--targetLabel', 1, 'label for the target class, yellow = 1, red = 2')
 local opt = cmd:parse(arg)
 local sorted = true
 local plotOriginal = false
 local utils = require 'utils'
 
---local checkpoint = torch.load(string.format("%sepoch_%s.t7", opt.checkpointDir, opt.epoch))
-local checkpoint = torch.load(string.format("%sepoch_%s_iter_%d.t7", opt.checkpointDir, opt.epoch, opt.iter))
+paths.mkdir(string.format("%s/%s", opt.plotDir, opt.split))
+if sorted then
+  paths.mkdir(string.format("%s/%s/sorted", opt.plotDir, opt.split))
+end
+local checkpoint = torch.load(string.format("%sepoch_%s.t7", opt.checkpointDir, opt.epoch))
+--local checkpoint = torch.load(string.format("%sepoch_%s_iter_%d.t7", opt.checkpointDir, opt.epoch, opt.iter))
 local net = checkpoint.model
 local type = net:type()
+net:evaluate()
 
 local Loader = require 'OnlineLoader'
 local loader = Loader.create(opt)
@@ -51,7 +56,8 @@ end
 
 local cnt = 0
 local entries = {}
-local dataList = nil 
+local dataList = nil
+--local dataList = torch.range(21,22):long()
 if opt.nSamples > 0 then
   dataList = torch.range(1, opt.nSamples):long()
 end
@@ -70,26 +76,27 @@ for data in iter() do
   predict = predict:view(batchSize, -1)
   local dice = utils.diceCoef(predict, target:view(batchSize, -1), 1, true)
   local outputView = output:view(batchSize, downsampleW, downsampleH, -1)
+  if torch.type(dice) == 'number' then dice = torch.Tensor{dice} end
   for i = 1, dice:size(1) do
     cnt = cnt + 1
     print(cnt, data.idx[i])
     local fileNameRoot = string.format("%s%s/epoch_%d_%d", opt.plotDir, opt.split, opt.epoch, cnt)
-    local downRawFile = string.format("%s_r.png", fileNameRoot)
+    local downRawFile = string.format("%s_r_%d.png", fileNameRoot,data.idx[i])
     utils.drawImage(downRawFile, input[i][1]:type(dataOriginalType))
-    local dRetinaArea = utils.getRetinaArea(input[i][1])
-    local dTrueArea = 0
+    --local dRetinaArea = utils.getRetinaArea(input[i][1])
+    --local dTrueArea = 0
     local downTrueFile = nil
     if opt.split ~= 'control' then 
       local trueDraw = target.new():resizeAs(target[i]):zero()
       trueDraw:maskedFill(target[i]:eq(2),opt.targetLabel)
-      dTrueArea = trueDraw:eq(opt.targetLabel):sum()
-      downTrueFile = string.format("%s_t_%.3f.png", fileNameRoot, (dTrueArea+eps)/(dRetinaArea+eps))
+      --dTrueArea = trueDraw:eq(opt.targetLabel):sum()
+      downTrueFile = string.format("%s_t.png", fileNameRoot)
       utils.drawImage(downTrueFile, input[i][1]:type(dataOriginalType), trueDraw:type(dataOriginalType))
     end
     local predictDraw = predict[i].new():resizeAs(predict[i]):zero()
     predictDraw:maskedFill(predict[i]:eq(2), opt.targetLabel)
     local dPredictArea = predictDraw:eq(opt.targetLabel):sum()
-    local downPredictFile = string.format("%s_p_%.3f_%.3f_%.3f.png", fileNameRoot, dice[i], (dPredictArea+eps)/(dRetinaArea+eps), (dPredictArea+eps)/(dTrueArea+eps))
+    local downPredictFile = string.format("%s_p_%.3f.png", fileNameRoot, dice[i])
     utils.drawImage(downPredictFile, input[i][1]:type(dataOriginalType), predictDraw:view(downsampleW, -1):type(dataOriginalType))
         
     
@@ -107,13 +114,13 @@ for data in iter() do
     local upsampledDc = utils.diceCoef(upsamplePredict, originalLabelDraw+1, 1)
     local upsamplePredictDraw = upsamplePredict.new():resizeAs(upsamplePredict):zero()
     upsamplePredictDraw:maskedFill(upsamplePredict:eq(2), opt.targetLabel)
-    local upRetinaArea = utils.getRetinaArea(originalRawImage[1])
-    local upTrueArea = originalLabelDraw:sum()
-    local upPredictArea = upsamplePredictDraw:eq(opt.targetLabel):sum()
-    local upPredictFile = string.format("%s_upsampled_%0.3f_%0.3f_%0.3f.png", fileNameRoot, upsampledDc, (upPredictArea+eps)/(upRetinaArea+eps), (upPredictArea+eps)/(upTrueArea+eps))
+    --local upRetinaArea = utils.getRetinaArea(originalRawImage[1])
+    --local upTrueArea = originalLabelDraw:sum()
+    --local upPredictArea = upsamplePredictDraw:eq(opt.targetLabel):sum()
+    local upPredictFile = string.format("%s_upsampled_%0.3f.png", fileNameRoot, upsampledDc)
     utils.drawImage(upPredictFile, originalRawImage[1], upsamplePredictDraw)
-
-    entries[cnt] = {idx = cnt, downRawFile = downRawFile, downTrueFile = downTrueFile, downPredictFile = downPredictFile, upPredictFile = upPredictFile, originalRawFile = data.rawFilePath[i], originalLabelFile = data.labelFilePath[i], dc = dice[i], upsampledDc = upsampledDc, dTrueArea=dTrueArea, dPredictArea=dPredictArea, dRetinaArea=dRetinaArea,upTrueArea=upTrueArea, upPredictArea=upPredictArea, upRetinaArea=upRetinaArea}
+    
+    entries[cnt] = {idx = data.idx[i], downRawFile = downRawFile, downTrueFile = downTrueFile, downPredictFile = downPredictFile, upPredictFile = upPredictFile, originalRawFile = data.rawFilePath[i], originalLabelFile = data.labelFilePath[i], dc = dice[i], upsampledDc = upsampledDc}
   end
 end
 
@@ -129,18 +136,18 @@ for k, entry in pairs(entries) do
   local sortedRaw = string.format("%s%d_r_%d.png", sortedFileRoot, k, entry.idx)
   os.execute("cp \"" .. entry.downRawFile .. "\" \"" .. sortedRaw .. "\"")
   --os.rename(entry.downRawFile,sortedRaw)
-  local sortedPredict = string.format("%s%d_p_%.3f_%.3f_%0.3f.png", sortedFileRoot, k, entry.dc, (entry.dPredictArea+eps)/(entry.dRetinaArea+eps), (entry.dPredictArea+eps)/(entry.dTrueArea+eps))
+  local sortedPredict = string.format("%s%d_p_%.3f.png", sortedFileRoot, k, entry.dc)
   os.execute("cp \"" .. entry.downPredictFile .. "\" \"" .. sortedPredict .. "\"")
   --os.rename(entry.downPredictFile, sortedPredict)
-  local sortedUpsample = string.format("%s%d_p_upsampled_%0.3f_%.3f_%.3f.png", sortedFileRoot, k, entry.upsampledDc, (entry.upPredictArea+eps)/(entry.upRetinaArea+eps), (entry.upPredictArea+eps)/(entry.upTrueArea+eps))
+  local sortedUpsample = string.format("%s%d_p_upsampled_%0.3f.png", sortedFileRoot, k, entry.upsampledDc)
   os.execute("cp \"" .. entry.upPredictFile .. "\" \"" .. sortedUpsample .. "\"")
   --os.rename(entry.upPredictFile, sortedUpsample)
   if opt.split ~= 'control' then
-    local sortedTrue = string.format("%s%d_t_%.3f.png", sortedFileRoot, k, (entry.dTrueArea+eps)/(entry.dRetinaArea+eps))
+    local sortedTrue = string.format("%s%d_t.png", sortedFileRoot, k)
     os.execute("cp \"" .. entry.downTrueFile .. "\" \"" .. sortedTrue .. "\"")
     --os.rename(entry.downTrueFile, sortedTrue)
     if plotOriginal then
-      local sortedOriginalLabel = string.format("%s%d_t_original_%.3f.png", sortedFileRoot, k, (entry.upTrueArea+eps)/(entry.upRetinaArea+eps))
+      local sortedOriginalLabel = string.format("%s%d_t_original.png", sortedFileRoot, k)
       os.execute("cp \"" .. entry.originalLabelFile .. "\" \"" .. sortedOriginalLabel .. "\"")
     end
   end

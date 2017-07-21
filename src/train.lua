@@ -14,6 +14,7 @@ local cmd = torch.CmdLine()
 cmd:option('--dataDir', string.format("%sdata/%s/", rootDir, resolution), 'data directory')
 cmd:option('--batchSize', 8, 'batch size')
 cmd:option('--targetLabel', 2, 'target label, yellow is 1, red is 2')
+cmd:option('--nThread', 1, 'number of threads the data loader uses')
 
 cmd:option('--highRes', '/home/saxiao/oir/data/res2048/', 'high resolution label directory')
 
@@ -254,7 +255,9 @@ local function trainWholeImg()
       sample = batchData
       _, loss = optim.adam(feval, params, optimOpt)
       if currentIter % opt.validateEvery == 0 then
+        net:evaluate()  -- this is important as some modules are computed differently in training and test time, e.g. batchNormalization
         validate()
+        net:training()
       end
       checkAndSaveMetrics()
       collectgarbage()
@@ -277,7 +280,9 @@ local function trainPatch()
         sample = batchData
         _, loss = optim.adam(feval, params, optimOpt)
         if currentIter % opt.validateEvery == 0 then
+          net:evaluate()
           validatePatch()
+          net:training()
         end
         checkAndSaveMetrics()
         collectgarbage()        
@@ -289,6 +294,7 @@ local function trainPatch()
   end
 end
 
+net:training()
 if opt.trainPatch then
   trainPatch()
 else

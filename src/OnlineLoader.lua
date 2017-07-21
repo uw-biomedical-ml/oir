@@ -8,7 +8,7 @@ function Loader.create(opt)
   local self = {}
   setmetatable(self, Loader)
   self.dataDir = opt.dataDir
-  self.nThread = opt.nThread or 4
+  self.nThread = opt.nThread or 1
   self.batchSize = opt.batchSize or 32
   self.var = opt.var or 0.3
   if opt.includeControl then  

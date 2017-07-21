@@ -1,7 +1,6 @@
 .buildpath
 .project
 .settings/
-*.tif
 data/
 plot/
 checkpoint/
@@ -10,3 +9,5 @@ checkpoint/
 *.t7
 *.swp
 all-exp-code/
+output/
+backup/

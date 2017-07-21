@@ -47,6 +47,18 @@ function utils.drawRetina(fileName, img2D, label)
   image.save(fileName, img3D)
 end
 
+function utils.upsampleLabel(output, originalSize)
+  local outputFloat = output:float()
+  local nClasses = outputFloat:size(3)
+  local upsampleOutput = outputFloat.new():resize(originalSize.w, originalSize.h, nClasses)
+  for i = 1, nClasses do
+    upsampleOutput[{{},{},i}]:copy(image.scale(outputFloat[{{},{},i}], originalSize.w, originalSize.h))
+  end
+  local _, upsamplePredict = upsampleOutput:max(3)
+  upsamplePredict = upsamplePredict:squeeze()
+  return upsamplePredict
+end
+
 function utils.drawImage(fileName, raw2D, label)
   local w, h = raw2D:size(1), raw2D:size(2)
   local img = raw2D.new():resize(3, w, h):zero()
@@ -66,13 +78,6 @@ function utils.drawImage(fileName, raw2D, label)
   image.save(fileName, img)
 end
 
-function utils.getRetinaArea(image2D)
-  local retinaMask = image2D:new():resizeAs(image2D):copy(image2D)
-  -- boost the contrast first
-  retinaMask = utils.varyContrast(retinaMask, 1.5)
-  return retinaMask:gt(10):sum()
-end
- 
 local function isGrey(image)
   local m12 = image[1]:eq(image[2])
   local m23 = image[2]:eq(image[3])
@@ -228,14 +233,12 @@ function utils.pixelHist(rawImg2D, label, plotName, opt)
 end
 
 function utils.learnByKmeansThreshold(img2D, opt)
-  -- 50 should be a hyper parameter
+  if not opt then opt = {} end
+  -- should be a hyper parameter
   local threshold = 100
   local maskltTh = img2D:lt(threshold)
   local x = img2D:maskedSelect(maskltTh):float()
-  if opt.useLog then
-    x = (x+1):log()
-  end
-  x = x:view(-1,1)
+  x = (x+1):log():view(-1,1)
   local nIter = 7
   local k = 2
   progress = {}
