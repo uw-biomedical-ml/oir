@@ -20,6 +20,11 @@ luarocks install gnuplot
 
 If you have an NVIDIA GPU, you can accelerate all operations with CUDA.
 
+```bash
+luarocks install cutorch
+luarocks install cunn
+```
+
 ### .tif, .tiff support
 The code supports .tif and .tiff format, but you need to install the following package:
 
@@ -28,10 +33,6 @@ luarocks install graphicsmagick
 ```
 I encountered an `libGraphicsMagickWand.so not found` error when I tried to include the library after intalling using luarocks on some machines. This [link](https://github.com/eladhoffer/ImageNet-Training/issues/5) may help.
 
-```bash
-luarocks install cutorch
-luarocks install cunn
-```
 ## Run segmentation on new image
 
 ```bash
