@@ -6,7 +6,6 @@ plot/
 checkpoint/
 *.txt
 *.log
-*.t7
 *.swp
 all-exp-code/
 output/

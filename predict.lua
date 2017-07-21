@@ -6,7 +6,7 @@ require 'image'
 local utils = require 'src/utils'
 
 local cmd = torch.CmdLine()
-cmd:option('--imageFile', 'image/raw.png', 'image file')
+cmd:option('--imageFile', 'sample/raw.png', 'image file')
 cmd:option('--task', 3, '1(yellow)|2(red)|3(both)')
 cmd:option('--redModel', 'model/red.t7', 'trained model for red')
 cmd:option('--yellowModel', 'model/yellow.t7', 'trained model for yellow')

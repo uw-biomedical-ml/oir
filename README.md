@@ -40,6 +40,6 @@ th predict.lua --imageFile 'image/raw.png' --outputdir 'output'
 
 Here is an example of the input and output from the model
 <div align='center'>
-  <img src='image/raw.png' height='350px'>
-  <img src='output/predict.png' height="350px">
+  <img src='sample/raw.png' height='350px'>
+  <img src='sample/predict.png' height="350px">
 </div>
