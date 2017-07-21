@@ -39,7 +39,7 @@ I encountered an `libGraphicsMagickWand.so not found` error when I tried to incl
 th predict.lua --imageFile 'image/raw.png' --outputdir 'output'
 ```
 
-Here is an example of the input and output from the model
+Here is an example of the input and output
 <div align='center'>
   <img src='sample/raw.png' height='350px'>
   <img src='sample/predict.png' height="350px">
