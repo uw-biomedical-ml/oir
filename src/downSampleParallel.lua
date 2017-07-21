@@ -1,7 +1,7 @@
 require 'torch'
 require 'image'
 local tnt = require 'torchnet'
-local utils = require 'utils'
+local utils = require 'src/utils'
 
 local rootDir = "/home/saxiao/oir/data/"
 local imageW, imageH = 512, 512

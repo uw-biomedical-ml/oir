@@ -1,5 +1,4 @@
 local tnt = require 'torchnet'
-local utils = require 'utils'
 
 local Loader = {}
 Loader.__index = Loader
@@ -45,17 +44,6 @@ local function transform(sample, var, plotOpt)
       if plotOpt then contrastVarUp = 0 end
       local scale = 1 + torch.uniform(-var, contrastVarUp)
       transformed.input = varyContrast(transformed.input, scale)
-
-      if plotOpt then
-        local inputName = string.format("%s%d_r.png", plotOpt.plotDir, plotOpt.idx)
-        utils.drawImage(inputName, sample.input)
-        local transformedInputName = string.format("%s%d_r_%0.3f_%.3f.png", plotOpt.plotDir, plotOpt.idx, theta, scale)
-        utils.drawImage(transformedInputName, transformed.input:byte())
-        local targetName = string.format("%s%d_t.png", plotOpt.plotDir, plotOpt.idx)
-        utils.drawImage(targetName, sample.input, sample.target)
-        local transformedTargetName = string.format("%s%d_t_%0.3f_%.3f.png", plotOpt.plotDir, plotOpt.idx, theta, scale)
-        utils.drawImage(transformedTargetName, transformed.input:byte(), transformed.target)
-      end
 
       return {
         input = transformed.input,

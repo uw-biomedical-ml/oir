@@ -2,7 +2,7 @@ require 'nn'
 require 'nngraph'
 require 'gnuplot'
 require 'lfs'
-require 'model'
+require 'src/model'
 require 'cunn'
 require 'cutorch'
 
@@ -21,9 +21,9 @@ cmd:option('--nSamples', 100, 'number of samples to draw for evaluation')
 cmd:option('--classId', 1, 'classId to classify')
 local opt = cmd:parse(arg)
 
-local utils = require 'utils'
+local utils = require 'src/utils'
 
-local Loader = require 'OnlineLoader'
+local Loader = require 'src/OnlineLoader'
 local loader = Loader.create(opt)
 
 local criterion = nn.CrossEntropyCriterion()

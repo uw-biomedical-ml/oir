@@ -2,7 +2,7 @@ require 'torch'
 require 'image'
 require 'lfs'
 local tnt = require 'torchnet'
-local utils = require 'utils'
+local utils = require 'src/utils'
 local imageW, imageH = 256, 256
 local nThread = 3
 local drawImg = false

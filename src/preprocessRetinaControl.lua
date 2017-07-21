@@ -1,6 +1,6 @@
 require 'lfs'
 local gm = require 'graphicsmagick'
-local utils = require 'utils'
+local utils = require 'src/utils'
 
 local dataDir = "/data/oir/retina-segmented"
 

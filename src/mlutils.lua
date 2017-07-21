@@ -1,4 +1,7 @@
 local mlutils = {}
+
+-- This code is mainly copied from https://github.com/koraykv/unsup/blob/master/kmeans.lua
+-- with small modification to better suited our use case
 --
 -- The k-means algorithm.
 --

@@ -1,6 +1,6 @@
 require 'image'
 require 'gnuplot'
-local mlutils = require 'mlutils'
+local mlutils = require 'src/mlutils'
 
 local utils = {}
 

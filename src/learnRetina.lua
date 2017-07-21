@@ -1,18 +1,20 @@
 require 'gnuplot'
-local mlutils = require 'mlutils'
+local mlutils = require 'src/mlutils'
 
 local gm = require 'graphicsmagick'
-local utils = require 'utils'
+local utils = require 'src/utils'
 local dataDir = "/home/saxiao/oir/data/retina"
-local plotDir = "/home/saxiao/tmp/oirhist/learn/retina/fullreslog"
-local downSample = false
+local plotDir = "tmp"
+local downSample = true
 local dH, dW = 256, 256
 local idxstart, idxend = -1,-1
 local reuseIndice = false
 local useLog = true
 local plotId = 1
-local verbose = false
+local verbose = true
 local printRaw = false
+
+paths.mkdir(plotDir)
 
 local function pixelHistRawLog(rawImg2D, plotName)
   --local nbins, min, max = 100, 1, 100

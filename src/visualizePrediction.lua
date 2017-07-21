@@ -3,7 +3,6 @@ require 'nn'
 require 'nngraph'
 require 'gnuplot'
 require 'lfs'
-require 'model'
 require 'cunn'
 require 'cutorch'
 require 'os'
@@ -27,7 +26,7 @@ cmd:option('--targetLabel', 1, 'label for the target class, yellow = 1, red = 2'
 local opt = cmd:parse(arg)
 local sorted = true
 local plotOriginal = false
-local utils = require 'utils'
+local utils = require 'src/utils'
 
 paths.mkdir(string.format("%s/%s", opt.plotDir, opt.split))
 if sorted then
@@ -39,7 +38,7 @@ local net = checkpoint.model
 local type = net:type()
 net:evaluate()
 
-local Loader = require 'OnlineLoader'
+local Loader = require 'src/OnlineLoader'
 local loader = Loader.create(opt)
 
 local function upsampleLabel(output, originalSize)
