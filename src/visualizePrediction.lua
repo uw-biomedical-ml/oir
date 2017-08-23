@@ -17,15 +17,15 @@ local cmd = torch.CmdLine()
 cmd:option('--dataDir', '/home/saxiao/oir/data/res256/', 'data directory')
 cmd:option('--split', 'test', 'split')
 cmd:option('--checkpointDir', '/home/saxiao/oir/checkpoint/res256/augment/online/yellow/', 'checkpoint directory')  -- red:"/home/saxiao/oir/checkpoint/red/res512/", yellow: "/home/saxiao/oir/checkpoint/res256/augment/online/yellow/", red(256): '/home/saxiao/oir/checkpoint/res256/augment/online/red/'
-cmd:option('--plotDir', '/home/saxiao/oir/plot/yellow/', 'plot directory')
+cmd:option('--plotDir', '/home/saxiao/oir/plot/yellow/oldrun/', 'plot directory')
 cmd:option('--epoch', 150, 'start epoch') -- red(512):700, red(256): 256, yellow: 150
-cmd:option('--iter', 60200, 'start iter')
+cmd:option('--iter', 17160, 'start iter')
 cmd:option('--batchSize', 32, 'batch size')
 cmd:option('--nSamples', -1, 'number of samples to draw for evaluation')
 cmd:option('--targetLabel', 1, 'label for the target class, yellow = 1, red = 2')
 local opt = cmd:parse(arg)
 local sorted = true
-local plotOriginal = false
+local plotOriginal = true
 local utils = require 'src/utils'
 
 paths.mkdir(string.format("%s/%s", opt.plotDir, opt.split))

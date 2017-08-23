@@ -49,7 +49,7 @@ local function getDownsampleIter(inputFile)
             local rawImage = gm.Image(rawPath):toTensor('byte','RGB','DHW')
             local labelImage = gm.Image(labelPath):toTensor('byte','RGB','DHW')
             if rawImage:size(2) == labelImage:size(2) then
-              local label = utils.getLabel(rawImage, labelImage) -- bg/normal = 1, yellow = 1, red = 2
+              local label = utils.getLabel(rawImage, labelImage) -- bg/normal = 0, yellow = 1, red = 2
               local hasRed = false
               if label:max() == 2 then
                 hasRed = true

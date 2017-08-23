@@ -45,6 +45,8 @@ for i, d in pairs(vals) do
 end
 
 print(valsVec:min(), valsVec:max())
+print("mean", valsVec:mean())
+print("median", valsVec:median():squeeze())
 local keyword = "dice"
 local fileName = dirRoot .. keyword .. "HistTestSet.png"
 if isUpsampled then fileName = dirRoot .. keyword .. "HistTestSet_upsampled.png" end

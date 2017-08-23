@@ -4,8 +4,7 @@ local utils = require 'src/utils'
 
 local dataDir = "/data/oir/retina-segmented"
 
-local files = {}
-local function findMatchedRawFile(fileName, key)
+local function findMatchedRawFile(files, fileName, key)
   if string.match(fileName, key) then
     local qStart = string.find(fileName, key)
     local rawFilePrefix = string.sub(fileName,1,qStart-1)
@@ -22,9 +21,10 @@ local function findMatchedRawFile(fileName, key)
   end
 end
 
+local files = {}
 for file in lfs.dir(dataDir) do
-  findMatchedRawFile(file, "quantified")
-  findMatchedRawFile(file, "labeled")
+  utils.findMatchedRawFile(files, file, "quantified")
+  utils.findMatchedRawFile(files, file, "labeled")
 end
 
 local function isRetinaBoundary(rgb)

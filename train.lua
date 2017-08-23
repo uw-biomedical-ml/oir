@@ -5,15 +5,15 @@ require 'optim'
 require 'image'
 
 local model = require 'src/model'
-local resolution = "res512"
+local resolution = "res256"
 local rootDir = "/home/saxiao/oir/"
-local modelId = "res512"
-local checkpointEpoch, checkpointIter = 530, 45580  -- 221300
+local modelId = "yellow"
+local checkpointEpoch, checkpointIter = 0, 0  -- 221300
 local cmd = torch.CmdLine()
 -- data options
 cmd:option('--dataDir', string.format("%sdata/%s/", rootDir, resolution), 'data directory')
-cmd:option('--batchSize', 8, 'batch size')
-cmd:option('--targetLabel', 2, 'target label, yellow is 1, red is 2')
+cmd:option('--batchSize', 32, 'batch size')
+cmd:option('--targetLabel', 1, 'target label, yellow is 1, red is 2')
 cmd:option('--nThread', 1, 'number of threads the data loader uses')
 
 cmd:option('--highRes', '/home/saxiao/oir/data/res2048/', 'high resolution label directory')
@@ -27,7 +27,7 @@ cmd:option('--includeControl', false, 'including the control images')
 -- model options
 cmd:option('--nClasses', 2, 'number of classes')
 cmd:option('--useLocation', false, 'add location in the input, true only when trainPatch is true')
-cmd:option('--model', '/home/saxiao/oir/checkpoint/red/' .. modelId .. '/epoch_' .. checkpointEpoch .. '_iter_' .. checkpointIter .. '.t7', 'a checkpoint file')
+--cmd:option('--model', '/home/saxiao/oir/checkpoint/red/' .. modelId .. '/epoch_' .. checkpointEpoch .. '_iter_' .. checkpointIter .. '.t7', 'a checkpoint file')
 
 -- training options
 cmd:option('--maxEpoch', 3000, 'maxumum epochs to train')
@@ -41,15 +41,17 @@ cmd:option('--gpuid', 0, 'patch size')
 cmd:option('--seed', 123, 'patch size')
 
 -- checkpoint options
-cmd:option('--checkpointDir', rootDir .. "checkpoint/red/" .. modelId .. "/", 'checkpoint directory')
+cmd:option('--checkpointDir', rootDir .. "checkpoint/" .. modelId .. "/", 'checkpoint directory')
 cmd:option('--saveModelEvery', 10, 'save model every n epochs')
 cmd:option('--historyFilePrefix', '/home/saxiao/oir/' .. modelId, 'prefix of the file to save the loss and accuracy for each iteration while training')
-cmd:option('--validateEvery', 500, 'run validation every n iterations')
+cmd:option('--validateEvery', 100, 'run validation every n iterations')
 cmd:option('--trainAverageEvery', 50, 'average training metric every n iterations')
 
 local opt = cmd:parse(arg)
 
 local nFiles = {train=682, validate=171, test=214}
+
+paths.mkdir(opt.checkpointDir)
 
 -- load lib for gpu
 if opt.gpuid > -1 then
@@ -81,7 +83,11 @@ else
   if opt.useLocation then
     net = model.uNet1WithLocation(opt)
   else
-    net = model.uNet1For512(opt)
+    if opt.targetLabel == 2 then
+      net = model.uNet1For512(opt)
+    else
+      net = model.uNet1(opt)
+    end
   end
   optimOpt = {learningRate = opt.learningRate}
 end
@@ -237,6 +243,7 @@ local function saveCheckpoint(epoch, loss)
   checkpoint.iter = currentIter
   checkpoint.loss = loss[1]
   checkpoint.optimOpt = optimOpt
+  checkpoint.opt = opt
   net:clearState()
   checkpoint.model = net
   local fileName = string.format("%sepoch_%d_iter_%d.t7",opt.checkpointDir, epoch, currentIter)

@@ -4,7 +4,7 @@ local mlutils = require 'src/mlutils'
 local gm = require 'graphicsmagick'
 local utils = require 'src/utils'
 local dataDir = "/home/saxiao/oir/data/retina"
-local plotDir = "tmp"
+local plotDir = "/home/saxiao/oir/retina/downsample256log"
 local downSample = true
 local dH, dW = 256, 256
 local idxstart, idxend = -1,-1
@@ -12,7 +12,7 @@ local reuseIndice = false
 local useLog = true
 local plotId = 1
 local verbose = true
-local printRaw = false
+local printRaw = true
 
 paths.mkdir(plotDir)
 
@@ -178,6 +178,14 @@ local function ratioHist()
   gnuplot.plotflush()
 end
 
+local function ratioStat()
+  local ratio = torch.load(string.format("%s/ratio.t7", plotDir))
+  print("mean", ratio:mean())
+  print("median", ratio:median())
+  print("std", ratio:std())   
+end
+
 --learn()
 evaluate()
 ratioHist()
+ratioStat()

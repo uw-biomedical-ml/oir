@@ -74,11 +74,17 @@ function utils.drawImage(fileName, raw2D, label)
     img[1]:maskedFill(redMask, 255)
     img[2]:maskedFill(redMask, 0)
     img[3]:maskedFill(redMask, 0)
+    if label:max() == 3 then
+      local retinaMask = label:eq(3)
+      img[1]:maskedFill(retinaMask, 255)
+      img[2]:maskedFill(retinaMask, 255)
+      img[3]:maskedFill(retinaMask, 255)
+    end
   end
   image.save(fileName, img)
 end
 
-local function isGrey(image)
+local function isGrey(image, includeRetina)
   local m12 = image[1]:eq(image[2])
   local m23 = image[2]:eq(image[3])
   local m123 = torch.cmul(m12, m23)  -- bg=1, if grey scale: normal(pixels in all three channels are 0)=1, yellow, red=0, if not grey scale: normal/red=0, yellow=0
@@ -90,21 +96,27 @@ local function isGrey(image)
     isGrey =  true
     labelMask = m123 * (-1) + 1  -- flip 0's and 1's
     local rgDiff = (image[1]:float():add(-1, image[2]:float())):abs()
-    local redYellowCutoff = 30
+    local gbDiff = (image[2]:float():add(-1, image[3]:float())):abs()
+    local redYellowCutoff = 30  -- 30
+    local gbYellowCutoff = 30
     if rgDiff:max() > redYellowCutoff then
       -- There are red and yellow highlighted
       labelMask:zero()
       labelMask:maskedFill(rgDiff:ge(redYellowCutoff), 2)  -- red = 2
-      labelMask:maskedFill(rgDiff:lt(redYellowCutoff), 1)  -- yellow + normal + bg = 1
+      labelMask:maskedFill(rgDiff:lt(redYellowCutoff):cmul(gbDiff:gt(gbYellowCutoff)), 1)  -- yellow + normal + bg = 1
       labelMask:maskedFill(m123, 0)  -- normal+bg=0
+      if includeRetina then
+        local rbDiff = (image[1]:float():add(-1, image[3]:float())):abs()
+        labelMask:maskedFill(image[3]:gt(100):cmul(rbDiff:gt(30)), 3)
+      end
     end
   end
   return isGrey, labelMask
 end
 
-function utils.getLabel(rawImage, labelImage)
+function utils.getLabel(rawImage, labelImage, includeRetina)
   local label = rawImage[2]:ne(labelImage[2])  -- yellow = 1, the rest (normal, bg, red possibly) = 0
-  local isGrey, qMask = isGrey(labelImage)
+  local isGrey, qMask = isGrey(labelImage, includeRetina)
   if isGrey then
     label = qMask
   end
@@ -276,6 +288,30 @@ function utils.scale(raw, label, w, h, plotOpt)
   end
 
   return draw, dlabel
+end
+
+function utils.findMatchedRawFile(files, fileName, key, labelId)
+  for file in lfs.dir(fileName) do
+    if file ~= "." and file ~= ".." then
+      local path = fileName .. "/" .. file
+      if lfs.attributes(path, "mode") == "directory" then
+        utils.findMatchedRawFile(files, path, key)
+      elseif lfs.attributes(path, "mode") == "file" and string.match(file, key) then
+        local qStart = string.find(file, key)
+        local rawFilePrefix = string.sub(file,1,qStart-1)
+        rawFilePrefix = string.gsub(rawFilePrefix, "%s*$", "")
+        local tmpFile = "tmp.txt"
+        os.execute("find /data/oir/ -name '*" .. rawFilePrefix .. "*' > " .. tmpFile)
+        local file = io.open(tmpFile)
+        for line in file:lines() do
+          if not string.match(line, key) then
+            table.insert(files, {raw=line, labelId=path})
+            break
+          end
+        end
+      end
+    end
+  end
 end
 
 return utils
