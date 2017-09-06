@@ -270,26 +270,43 @@ local function plotLabeledImage()
   end
 end
 
-local function saveDiceToFile()
-  local f = torch.load(diceFile)
+local function saveToFile(filename, segment, branch)
+  local f = torch.load(filename)
   for gt, data in pairs(f) do
-    local fname = string.format("plot/interperson/dice/%s-yellow.txt", gt)
+    local fname = string.format("plot/interperson/dice/%s-%s.txt", gt, segment)
     local file = io.open(fname, 'w')
-    for person, dices in pairs(data.yellow) do
-      for i=1, dices:size(1) do
-        file:write(string.format("%s %f\n", person, dices[i]))
-      end
-    end
-    file:close()
-    fname = string.format("plot/interperson/dice/%s-red.txt", gt)
-    file = io.open(fname, 'w')
-    for person, dices in pairs(data.red) do
+    if branch then data = data[branch] end
+    for person, dices in pairs(data) do
       for i=1, dices:size(1) do
         file:write(string.format("%s %f\n", person, dices[i]))
       end
     end
     file:close()
   end
+end
+
+local function saveDiceToFile()
+  saveToFile(diceFile, 'yellow', 'yellow')
+  saveToFile(diceFile, 'red', 'red')
+  --local f = torch.load(diceFile)
+  --for gt, data in pairs(f) do
+  --  local fname = string.format("plot/interperson/dice/%s-yellow.txt", gt)
+  --  local file = io.open(fname, 'w')
+  --  for person, dices in pairs(data.yellow) do
+  --    for i=1, dices:size(1) do
+  --      file:write(string.format("%s %f\n", person, dices[i]))
+  --    end
+  --  end
+  --  file:close()
+  --  fname = string.format("plot/interperson/dice/%s-red.txt", gt)
+  --  file = io.open(fname, 'w')
+  --  for person, dices in pairs(data.red) do
+  --    for i=1, dices:size(1) do
+  --      file:write(string.format("%s %f\n", person, dices[i]))
+  --    end
+  --  end
+  --  file:close()
+  --end
 end
 
 local function calMeanMedian(model)
@@ -317,6 +334,192 @@ local function calMeanMedian(model)
   print("model", allmodel:mean(), allmodel:median():squeeze())
 end
 
+local retinaTensorName = "interperson/retinaTensor.t7"
+local retinafilename = "interperson/retinaArea.t7"
+paths.mkdir("plot/interperson/retina")
+paths.mkdir("interperson")
+local N = -1
+
+local function isRetinaBoundary(rgb)
+ -- return math.abs(rgb[3]-rgb[2])/rgb[3] < 0.3 and math.abs(rgb[3]-rgb[1])/rgb[3] > 0.6
+  return rgb[1]<10 and rgb[2]>50 and rgb[3]>50
+end
+persons = {'feli', 'rj'} -- rj:512, feli: 1024,
+local printRaw = true
+local function learnRetina()
+  local file = torch.load(fileName)
+  local retinafile = {model={}, feli={}, kyle={}, rj={}, sophia={}}
+  local retinaTensor = {model={}, feli={}, kyle={}, rj={}, sophia={}}
+  local cnt = 1
+  for key, values in pairs(file) do
+    if key ~= "Mouse7R Scramble 10x 6t6" and key ~= "Mouse2L pro miR34a" then
+      print(cnt, key)
+      local raw = loadImage(values.raw)
+      if printRaw then
+        utils.drawImage(string.format("plot/interperson/retina/%d_raw.png", cnt), raw[1]:byte())
+      end
+      local draw = image.scale(raw[1], 256, 256)
+      local retina = utils.learnByKmeansThreshold(draw)
+      retina = image.scale(retina, raw:size(2), raw:size(3), 'simple')
+      table.insert(retinaTensor.model, retina)
+      table.insert(retinafile.model, retina:sum())
+      --table.insert(retinafile.model, retina:sum()*raw:size(2)*raw:size(3)/retina:size(1)/retina:size(2))
+      utils.drawImage(string.format("plot/interperson/retina/%d_p.png", cnt), raw[1]:byte(), retina)
+      for _, person in pairs(persons) do
+        print(person)
+        local img = loadImage(values[person])
+        local dimg
+        if person == 'feli' then
+          if cnt == 13 then
+            dimg = img
+          else
+            dimg = image.scale(img, 1024, 1024)
+          end
+        else
+          dimg = image.scale(img, 512, 512)
+        end
+        --image.save(string.format("plot/interperson/retina/%d_%s_%s.png", cnt, person, key), dimg)
+        retina = utils.fillDfs(dimg, isRetinaBoundary)
+        if img:size(2) ~= retina:size(1) then
+          retina = image.scale(retina, img:size(2), img:size(3), 'simple')
+        end
+        table.insert(retinaTensor[person], retina)
+        table.insert(retinafile[person], retina:sum())
+        --table.insert(retinafile[person], retina:sum()*img:size(2)*img:size(3)/retina:size(1)/retina:size(2))
+        utils.drawImage(string.format("plot/interperson/retina/%d_%s.png", cnt, person), img[1]:byte(), retina)
+      end
+    end
+    if cnt == N then break end
+    cnt = cnt + 1
+  end
+  --torch.save(retinaTensorName, retinaTensor)
+  --torch.save(retinafilename, retinafile)  
+end
+
+N = -1
+local function newRetinaSegment()
+  local file = torch.load(fileName)
+  local retinaTensor = torch.load(retinaTensorName)
+  local retinafile = torch.load(retinafilename)
+  local cnt = 1
+  local persons = {'sophia'}
+  for _, person in pairs(persons) do
+    retinaTensor[person] = {}
+    retinafile[person] = {}
+  end
+  local c = 1
+  for key, values in pairs(file) do
+    if key ~= "Mouse7R Scramble 10x 6t6" and key ~= "Mouse2L pro miR34a" then
+      print(cnt)
+      local targetsize = retinaTensor.model[c]:size(1)
+      c = c + 1
+      print("target size", targetsize)
+      for _, person in pairs(persons) do
+        local img = loadImage(values[person])
+        print("img size", img:size(2))
+        local retina = 1 - torch.cmul(torch.cmul(img[1]:eq(0), img[2]:eq(255)), img[3]:eq(0))
+        if img:size(2) ~= targetsize then
+          retina = image.scale(retina, targetsize, targetsize, 'simple')
+          img = image.scale(img, targetsize, targetsize)
+        end
+        table.insert(retinaTensor[person], retina)
+        table.insert(retinafile[person], retina:sum())
+        utils.drawImage(string.format("plot/interperson/retina/%d_%s.png", cnt, person), img[1]:byte(), retina)
+      end
+    end
+    if cnt == N then break end
+    cnt = cnt + 1
+  end 
+  torch.save(retinaTensorName, retinaTensor)
+  torch.save(retinafilename, retinafile)
+end
+
+local segmentareafile = "interperson/segmentArea.t7"
+persons = {'feli','kyle','rj', 'sophia'}
+local function computeSegmentationArea()
+  local f = torch.load(fileName)
+  local file = torch.load(processedFile)
+  local area = {yellow={}, red={}}
+  area.yellow={model={}, feli={}, kyle={}, rj={}, sophia={}}
+  area.red={model={}, feli={}, kyle={}, rj={}, sophia={}}
+  for key, _ in pairs(f) do
+    if key ~= "Mouse7R Scramble 10x 6t6" and key ~= "Mouse2L pro miR34a" then
+      local values = file[key]
+      table.insert(area.yellow.model, values.predictyellow:sum())
+      table.insert(area.red.model, values.predictred:eq(2):sum())
+      for _, person in pairs(persons) do
+        table.insert(area.yellow[person], values[person]:eq(1):sum())
+        table.insert(area.red[person], values[person]:eq(2):sum())
+      end
+    end
+  end
+  torch.save(segmentareafile, area)
+end
+
+local ratiofile = "interperson/areaRatio.t7"
+local function computeAreaRatio()
+  local retina = torch.load(retinafilename)
+  local seg = torch.load(segmentareafile)
+  local ratio = {yellow={}, red={}}
+  local persons = {'model', 'feli', 'kyle', 'rj', 'sophia'}
+  for _, person in pairs(persons) do
+    ratio.yellow[person] = torch.cdiv(torch.Tensor(seg.yellow[person]), torch.Tensor(retina[person]))
+    ratio.red[person] = torch.cdiv(torch.Tensor(seg.red[person]), torch.Tensor(retina[person]))
+  end
+  torch.save(ratiofile, ratio)
+end
+
+local function correlation(x, y)
+  local n = x:size(1)
+  local xy = torch.cmul(x,y)
+  local x2 = torch.cmul(x,x)
+  local y2 = torch.cmul(y,y)
+  return (n*xy:sum() - x:sum()*y:sum()) / (math.sqrt(n*x2:sum()-x:sum()*x:sum())*math.sqrt(n*y2:sum()-y:sum()*y:sum()))
+end
+
+local function computeCorrelation()
+  local ratio = torch.load(ratiofile)
+  local truth = {'feli', 'kyle', 'rj', 'sophia'}
+  local compare = {'feli', 'kyle', 'rj', 'sophia', 'model'}
+  for _, gt in pairs(truth) do
+    local x_yellow = ratio.yellow[gt]
+    local x_red = ratio.red[gt]
+    for _, person in pairs(compare) do
+      if person ~= gt then
+        local y_yellow = ratio.yellow[person]
+        local y_red = ratio.red[person]
+        print(string.format("gt: %s, %s, yellow: %f, red: %f", gt, person, correlation(x_yellow, y_yellow), correlation(x_red, y_red)))
+      end
+    end
+  end  
+end
+
+local retinaDice = "interperson/retinaDice.t7"
+local function computeRetinaDice()
+  local retinaTensor = torch.load(retinaTensorName)
+  local truth = {'feli', 'kyle', 'rj', 'sophia'}
+  local compare = {'feli', 'kyle', 'rj', 'sophia', 'model'}
+  local dice = {}
+  for _, gt in pairs(truth) do
+    dice[gt] = {}
+    local x = retinaTensor[gt]
+    for _, person in pairs(compare) do
+      if gt ~= person then
+        dice[gt][person] = torch.Tensor(#x)
+        local y = retinaTensor[person]
+        for i=1, #x do
+          dice[gt][person][i] = diceCoef(y[i], x[i], 1)
+        end
+      end
+    end
+  end
+  torch.save(retinaDice, dice)
+end
+
+local function saveRetinaDiceToFile()
+  saveToFile(retinaDice, 'retina')
+end
+
 --createFileList(fileName)
 --print(rawCnt)
 --process()
@@ -325,5 +528,12 @@ end
 --plotDiceCompare()
 --plotLabeledImage()
 --saveDiceToFile()
-calMeanMedian("yellow")
-calMeanMedian("red")
+--calMeanMedian("yellow")
+--calMeanMedian("red")
+--learnRetina()
+--computeSegmentationArea()
+--computeAreaRatio()
+--computeCorrelation()
+computeRetinaDice()
+saveRetinaDiceToFile()
+--newRetinaSegment()

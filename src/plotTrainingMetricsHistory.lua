@@ -17,40 +17,40 @@ local function plotFigure(opt, axisType)
   gnuplot.xlabel('iterations')
   if axisType then
     if axisType == 1 then
-      gnuplot.axis{0,'',0.02,0.1}
+      gnuplot.axis{0,'',0.02,0.35}  -- red {0,'',0.02,0.24}, yellow: {0,'',0.02,0.35}
     elseif axisType == 2 then
-      gnuplot.axis{0,'',0.2,0.9}
+      gnuplot.axis{0,'',0,1}  -- red: {0,'',0,0.9}, yellow: {0,'',0,1}
     end
   end
   gnuplot.plotflush()
 end
 
-local rootDir = "/home/saxiao/oir/plot/red/"
+local rootDir = "/home/saxiao/oir/plot/yellow"
 paths.mkdir(rootDir)
 
 local opt = {}
-local modelId = "res512"
+local modelId = "yellow"
 local trainFileName = "/home/saxiao/oir/" .. modelId .. "_train.txt"
 local valFileName = "/home/saxiao/oir/" ..modelId .. "_val.txt"
 
 opt.fileName = string.format("%s/%s_loss_val.png", rootDir, modelId)
 opt.title = "validate loss"
-opt.plotCommand = "plot '" .. valFileName .. "' using 1:2 notitle"
-plotFigure(opt)
+opt.plotCommand = "plot '" .. valFileName .. "' using 1:2 with points notitle"
+plotFigure(opt, 1)
 
 
 opt.fileName = string.format("%s/%s_loss_train.png", rootDir, modelId)
 opt.title = "train loss"
-opt.plotCommand = "plot '" .. trainFileName .. "' using 1:2 notitle"
-plotFigure(opt)
+opt.plotCommand = "plot '" .. trainFileName .. "' using 1:2 with points notitle"
+plotFigure(opt, 1)
 
 opt.fileName = string.format("%s/%s_dc_val.png", rootDir, modelId)
 opt.title = "validate dice"
-opt.plotCommand = "plot '" .. valFileName .. "' using 1:3 notitle"
-plotFigure(opt)
+opt.plotCommand = "plot '" .. valFileName .. "' using 1:3 with points notitle"
+plotFigure(opt, 2)
 
 
 opt.fileName = string.format("%s/%s_dc_train.png", rootDir, modelId)
 opt.title = "train dice"
-opt.plotCommand = "plot '" .. trainFileName .. "' using 1:3 notitle"
-plotFigure(opt)
+opt.plotCommand = "plot '" .. trainFileName .. "' using 1:3 with points notitle"
+plotFigure(opt, 2)

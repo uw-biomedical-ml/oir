@@ -1,10 +1,11 @@
 require 'lfs'
 require 'gnuplot'
 
-local dirRoot = "/home/saxiao/oir/plot/yellow/"
+local dirRoot ="/home/saxiao/oir/plot/red/res256/"   --"/home/saxiao/oir/plot/yellow-backup/"
 local dataDir = dirRoot .. "test/sorted/"
 local nbins = 40
 local isUpsampled = true
+local isRed = true
 
 local function findVal(file, key, istart, iend)
   local i, j = string.find(file, key)
@@ -44,9 +45,15 @@ for i, d in pairs(vals) do
   valsVec[i] = d
 end
 
+valsVec = torch.sort(valsVec)
+if isRed then
+  -- remove wrong inputs
+  valsVec = valsVec[{{6,-1}}]
+end
 print(valsVec:min(), valsVec:max())
 print("mean", valsVec:mean())
 print("median", valsVec:median():squeeze())
+print("std", valsVec:std())
 local keyword = "dice"
 local fileName = dirRoot .. keyword .. "HistTestSet.png"
 if isUpsampled then fileName = dirRoot .. keyword .. "HistTestSet_upsampled.png" end
