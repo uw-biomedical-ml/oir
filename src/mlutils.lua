@@ -102,7 +102,7 @@ function mlutils.kmeans(x, k, niter, batchsize, callback, verbose)
          summation:add( S:t() * batch )
          counts:add( sum(S,1) )
       end
-      
+      print("loss", loss)      
       -- normalize
       for i = 1,k do
          if counts[i] ~= 0 then
@@ -122,7 +122,7 @@ function mlutils.kmeans(x, k, niter, batchsize, callback, verbose)
    end
 
    -- done
-   return centroids:reshape(k_size),labels, totalcounts
+   return centroids:reshape(k_size),labels, totalcounts, loss
 end
 
 return mlutils

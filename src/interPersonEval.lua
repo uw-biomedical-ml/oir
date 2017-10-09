@@ -534,6 +534,6 @@ end
 --computeSegmentationArea()
 --computeAreaRatio()
 --computeCorrelation()
-computeRetinaDice()
-saveRetinaDiceToFile()
+--computeRetinaDice()
+--saveRetinaDiceToFile()
 --newRetinaSegment()

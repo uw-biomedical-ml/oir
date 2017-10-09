@@ -248,17 +248,22 @@ function utils.learnByKmeansThreshold(img2D, opt)
   if not opt then opt = {} end
   -- should be a hyper parameter
   local threshold = 100
+  --local threshold = img2D:float():mean()
   local maskltTh = img2D:lt(threshold)
   local x = img2D:maskedSelect(maskltTh):float()
   x = (x+1):log():view(-1,1)
   local nIter = 7
-  local k = 2
+  local k = opt.k and opt.k or 2
   progress = {}
   local m, label, counts = mlutils.kmeans(x,k,nIter, nil, opt.kmeansCallback, opt.verbose)
   --print(counts)
   --print(label:min(), label:max())
-  local retinaLabel = 1
-  if m[1][1] < m[2][1] then retinaLabel = 2 end
+  print(m)
+  local p, retinaLabel = m:max(1)
+  retinaLabel = retinaLabel:squeeze()
+  print("retinaLabel", retinaLabel)
+  --local retinaLabel = 1
+  --if m[1][1] < m[2][1] then retinaLabel = 2 end
   local imgLabel = torch.ByteTensor(img2D:size(1), img2D:size(2)):fill(1)
   imgLabel:maskedCopy(maskltTh, label:eq(retinaLabel))
   return imgLabel

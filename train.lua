@@ -6,14 +6,15 @@ require 'image'
 
 local model = require 'src/model'
 local resolution = "res256"
-local rootDir = "/home/saxiao/oir/"
-local modelId = "yellow"
+local rootDir = "./"
+local modelId = "retina"
 local checkpointEpoch, checkpointIter = 0, 0  -- 221300
 local cmd = torch.CmdLine()
 -- data options
-cmd:option('--dataDir', string.format("%sdata/%s/", rootDir, resolution), 'data directory')
+--cmd:option('--dataDir', string.format("%sdata/%s/", rootDir, resolution), 'data directory')
+cmd:option('--dataDir', string.format("%sdata/retina/", rootDir), 'data directory')
 cmd:option('--batchSize', 32, 'batch size')
-cmd:option('--targetLabel', 1, 'target label, yellow is 1, red is 2')
+cmd:option('--targetLabel', 1, 'target label, retina or yellow is 1, red is 2')
 cmd:option('--nThread', 1, 'number of threads the data loader uses')
 
 cmd:option('--highRes', '/home/saxiao/oir/data/res2048/', 'high resolution label directory')
