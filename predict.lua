@@ -80,7 +80,7 @@ function predict(opt)
       if opt.retinaModel then
         local retina_output = inference(opt.retinaModel, retinaSize)
         local _, retina_nn = retina_output:max(2)
-        retina_nn = retina_nn:squeeze():view(retinaSize, retinaSize)
+        retina_nn = retina_nn:squeeze():view(retinaSize, retinaSize) - 1
         utils.drawImage(string.format("%s/%s_retina_nn.png", opt.outputdir, basename), dimg:byte(), retina_nn:byte())
         retina['nn'] = retina_nn
       end

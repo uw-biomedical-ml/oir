@@ -37,11 +37,20 @@ local function varyContrast(input, scale)
   return input:mul(scale):add((1 - scale) * mean)
 end
 
-local function transform(sample, var, plotOpt)
+local function brightenBg(input, label, centroidsLog)
+  local pixel = math.exp(torch.uniform((cetroidsLog[2]+centroidsLog[1])/2, centroidsLog[2]))
+  input:maskedFill(label:eq(0), pixel)
+  return input
+end
+
+local function transform(sample, var, opt)
       local theta = torch.uniform(0, 2 * math.pi)
       local transformed = rotateImage(theta, sample.input, sample.target)
+      if opt.centroidsLog then
+        transformed.input = brightenBg(transformed.input, transformed.target, opt.centroidsLog)
+      end
       local contrastVarUp = var
-      if plotOpt then contrastVarUp = 0 end
+      if opt.plotOpt then contrastVarUp = 0 end
       local scale = 1 + torch.uniform(-var, contrastVarUp)
       transformed.input = varyContrast(transformed.input, scale)
 
@@ -129,7 +138,7 @@ function Loader:iteratorRandomPatch(data, opt)
             sample.input = rawImage:sub(hstart, hstart+patchSize-1, wstart, wstart+patchSize-1)
             sample.target = label:sub(hstart, hstart+patchSize-1, wstart, wstart+patchSize-1)
             if opt.augment then
-              local transformed = transform(sample, self.var, opt.plotOpt)
+              local transformed = transform(sample, self.var, opt)
               sample.input:copy(transformed.input)
               sample.target:copy(transformed.target)
             end
@@ -190,7 +199,11 @@ function Loader:iterator(split, opt)
               sample.target:copy(highRes.target)
             end
             if opt.augment then
-              local transformed = transform(sample, self.var, opt.plotOpt)
+              local transformOpt = {plotOpt = opt.plotOpt}
+              if opt.retina then
+                transformOpt.centroidsLog = dataSet[idx].centroidsLog
+              end
+              local transformed = transform(sample, self.var, opt)
               sample.input:copy(transformed.input)
               sample.target:copy(transformed.target)
             end

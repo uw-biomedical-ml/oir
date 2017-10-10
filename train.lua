@@ -15,6 +15,7 @@ local cmd = torch.CmdLine()
 cmd:option('--dataDir', string.format("%sdata/retina/", rootDir), 'data directory')
 cmd:option('--batchSize', 32, 'batch size')
 cmd:option('--targetLabel', 1, 'target label, retina or yellow is 1, red is 2')
+cmd:option('--retina', true, 'training the model for retina')
 cmd:option('--nThread', 1, 'number of threads the data loader uses')
 
 cmd:option('--highRes', '/home/saxiao/oir/data/res2048/', 'high resolution label directory')

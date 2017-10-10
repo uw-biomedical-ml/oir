@@ -21,7 +21,8 @@ local function addData(datafile, retinafile, indexes)
   for _, i in pairs(indexes) do
     o = {}
     o.input = data[i].input
-    o.target = retina[i]
+    o.target = retina[i].retina
+    o.centroidsLog = retina[i].centroidsLog
     o.labelFilePath = data[i].labelFilePath
     o.rawFilePath = data[i].rawFilePath
     o.originalSize = data[i].originalSize

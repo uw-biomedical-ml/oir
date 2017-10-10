@@ -29,6 +29,7 @@ luarocks install cunn
 The code supports .tif and .tiff format, but you need to install the following package:
 
 ```bash
+apt-get install libgraphicsmagick1-dev
 luarocks install graphicsmagick
 ```
 I encountered an `libGraphicsMagickWand.so not found` error when I tried to include the library after intalling using luarocks on some machines. This [link](https://github.com/eladhoffer/ImageNet-Training/issues/5) may help.

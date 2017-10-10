@@ -266,7 +266,7 @@ function utils.learnByKmeansThreshold(img2D, opt)
   --if m[1][1] < m[2][1] then retinaLabel = 2 end
   local imgLabel = torch.ByteTensor(img2D:size(1), img2D:size(2)):fill(1)
   imgLabel:maskedCopy(maskltTh, label:eq(retinaLabel))
-  return imgLabel
+  return imgLabel, m:squeeze()
 end
 
 function utils.scale(raw, label, w, h, plotOpt)
