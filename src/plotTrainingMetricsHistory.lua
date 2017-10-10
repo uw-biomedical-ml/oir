@@ -25,13 +25,13 @@ local function plotFigure(opt, axisType)
   gnuplot.plotflush()
 end
 
-local rootDir = "/home/saxiao/oir/plot/yellow"
+local rootDir = "./plot/retina"
 paths.mkdir(rootDir)
 
 local opt = {}
-local modelId = "yellow"
-local trainFileName = "/home/saxiao/oir/" .. modelId .. "_train.txt"
-local valFileName = "/home/saxiao/oir/" ..modelId .. "_val.txt"
+local modelId = "retina"
+local trainFileName = "./oir/" .. modelId .. "_train.txt"
+local valFileName = "./oir/" ..modelId .. "_val.txt"
 
 opt.fileName = string.format("%s/%s_loss_val.png", rootDir, modelId)
 opt.title = "validate loss"

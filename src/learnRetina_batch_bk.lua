@@ -1,33 +1,5 @@
 require 'lfs'
-require 'nn'
-require 'nngraph'
 local utils = require 'src/utils'
-
-local useNN = true
-local model, dtype
-if useNN then
-  require 'cunn'
-  require 'cutorch'
-  cutorch.setDevice(opt.gpu+1)
-  cutorch.manualSeed(123)
-  dtype = 'torch.CudaTensor'
-  
-  model = torch.load("")
-  model = model:type(dtype)
-end
-
-local function learnRetina(img2D, html, outpudir, basename)
-  local retina_km = utils.learnByKmeansThreshold(img2D, {k=2, verbose=true})
-  utils.drawImage(string.format("%s/image/%s_raw.png", outputdir, basename), img2D:byte())
-  utils.drawImage(string.format("%s/image/%s_retina_km.png", outputdir, basename), img2D:byte(), retina_km)
-  local originalType = img2D:type()
-  if model then
-    model:evaluate()
-    img2D = img2D:type(dtype)
-    retina_nn = model:forward(img2D:view(1,1,img2D:size(1),-1))
-    utils.drawImage(string.format("%s/image/%s_retina_nn.png", outputdir, basename), img2D:type(originalType):byte(), retina_nn:type(originalType):byte())
-  end
-end
 
 local function learnRetina(img2D, html, outputdir, basename)
   local retina = utils.learnByKmeansThreshold(img2D, {k=2, verbose=true})

@@ -4,6 +4,7 @@ require 'nngraph'
 require 'image'
 
 local utils = require 'src/utils'
+local gm = require 'graphicsmagick'
 
 local cmd = torch.CmdLine()
 cmd:option('--imageFile', 'sample/raw.png', 'image file')
@@ -15,7 +16,8 @@ cmd:option('--learnRetina', true, 'whether to draw retina')
 cmd:option('--verbose', true)
 cmd:option('--gpu', 0, '-1 means using cpu, for i >= 0 means using gpu with id = i+1')
 cmd:option('--thumbnailSize', -1, 'thumbnail size')
-cmd:option('--ks', {2,3,4})
+cmd:option('--ks', {2})
+cmd:option('--retinaModel', 'model/retina.t7')
 local opt = cmd:parse(arg)
 
 function predict(opt)
@@ -26,7 +28,7 @@ function predict(opt)
   if supportFormat[1][suffix] then
     img2D = image.load(opt.imageFile)[1] * 255
   elseif supportFormat[2][suffix] then
-    local gm = require 'graphicsmagick'
+    --local gm = require 'graphicsmagick'
     img2D = gm.Image(opt.imageFile):toTensor('byte','RGB','DHW')[1]
   else
     error(string.format("image format %s is not supported", suffix))
@@ -75,6 +77,13 @@ function predict(opt)
         retina[k] = utils.learnByKmeansThreshold(dimg, {k=k, verbose=opt.verbose})
         utils.drawImage(string.format("%s/%s_retina_k%d.png", opt.outputdir, basename, k), dimg:byte(), retina[k])
       end
+      if opt.retinaModel then
+        local retina_output = inference(opt.retinaModel, retinaSize)
+        local _, retina_nn = retina_output:max(2)
+        retina_nn = retina_nn:squeeze():view(retinaSize, retinaSize)
+        utils.drawImage(string.format("%s/%s_retina_nn.png", opt.outputdir, basename), dimg:byte(), retina_nn:byte())
+        retina['nn'] = retina_nn
+      end
     end  
     local tasks = {}
     if opt.task == 1 then
@@ -94,11 +103,11 @@ function predict(opt)
       upPredict:maskedFill(upsampled:eq(1), task.targetLabel)
       ratio[i] = {}
       if retina then
-        for k, retinaLabel in pairs(retina) do
+        for rkey, retinaLabel in pairs(retina) do
           local _, predict = output:max(2)
           predict = predict - 1
-          ratio[i][k] = predict:sum()/(retinaLabel:sum()*(task.dsize/retinaSize)^2)
-          print(string.format("%s area ratio / retian = %.3f", task.name, ratio[i][k]))
+          ratio[i][rkey] = predict:sum()/(retinaLabel:sum()*(task.dsize/retinaSize)^2)
+          print(string.format("%s area / retina ratio = %.3f", task.name, ratio[i][rkey]))
         end
       end
     end

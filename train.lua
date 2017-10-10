@@ -31,7 +31,7 @@ cmd:option('--useLocation', false, 'add location in the input, true only when tr
 --cmd:option('--model', '/home/saxiao/oir/checkpoint/red/' .. modelId .. '/epoch_' .. checkpointEpoch .. '_iter_' .. checkpointIter .. '.t7', 'a checkpoint file')
 
 -- training options
-cmd:option('--maxEpoch', 3000, 'maxumum epochs to train')
+cmd:option('--maxEpoch', 500, 'maxumum epochs to train')
 cmd:option('--learningRate', 1e-2, 'starting learning rate')
 cmd:option('--minLearningRate', 1e-7, 'minimum learning rate')
 cmd:option('--momentum', 0.9, 'patch size')
@@ -44,7 +44,7 @@ cmd:option('--seed', 123, 'patch size')
 -- checkpoint options
 cmd:option('--checkpointDir', rootDir .. "checkpoint/" .. modelId .. "/", 'checkpoint directory')
 cmd:option('--saveModelEvery', 10, 'save model every n epochs')
-cmd:option('--historyFilePrefix', '/home/saxiao/oir/' .. modelId, 'prefix of the file to save the loss and accuracy for each iteration while training')
+cmd:option('--historyFilePrefix', rootDir .. modelId, 'prefix of the file to save the loss and accuracy for each iteration while training')
 cmd:option('--validateEvery', 100, 'run validation every n iterations')
 cmd:option('--trainAverageEvery', 50, 'average training metric every n iterations')
 

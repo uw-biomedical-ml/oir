@@ -8,7 +8,8 @@ local opt = {task = 3,
              verbose = true,
              gpu = 0,
              thumbnailSize = 256,
-             ks={2}}
+             ks={2},
+             retinaModel = 'model/retina.t7'}
 
 local outputdirMap = {}
 local function predictForDir(dir)
@@ -22,6 +23,9 @@ local function predictForDir(dir)
   html:write('<tr><td>file name</td><td>Input</td><td>Predict</td>')
   for _, k in pairs(opt.ks) do
     html:write(string.format("<td>Retina k=%d</td><td>VO ratio k=%d</td><td>NV ratio k=%d</td>", k,k,k))
+  end
+  if opt.retinaModel then
+    html:write('<td>Retina NN</td><td>VO ratio NN</td><td>NV ratio NN</td>')
   end
   html:write('</tr>')
   
@@ -56,6 +60,13 @@ local function predictForDir(dir)
         html:write('<td>' .. nvratio .. '</td>')
         csvFile:write(string.format(",%s,%s", voratio, nvratio))
       end
+      if opt.retinaModel then
+        local voratio, nvratio = string.format("%.3f", ratio[1].nn), string.format("%.3f", ratio[2].nn)
+        html:write(string.format('<td><img src="./image/%s_retina_nn.png"/></td>', basename))
+        html:write('<td>' .. voratio .. '</td>')
+        html:write('<td>' .. nvratio .. '</td>')
+        csvFile:write(string.format(",%s,%s", voratio, nvratio))
+      end
       html:write('</tr>')
       csvFile:write("\n")
     end
@@ -83,6 +94,6 @@ function predictRecursive(dir)
   end
 end
 
-local dir = "/data/oir-test/OIR Quantification for Kyle"
+local dir = "/data/oir/data/OIR quantification for Felicitas/IfnG P17 inj P14/20170206"
 predictRecursive(dir)
 torch.save("outputdirMapping.t7", outputdirMap)
