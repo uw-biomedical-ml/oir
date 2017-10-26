@@ -32,7 +32,7 @@ cmd:option('--useLocation', false, 'add location in the input, true only when tr
 --cmd:option('--model', '/home/saxiao/oir/checkpoint/red/' .. modelId .. '/epoch_' .. checkpointEpoch .. '_iter_' .. checkpointIter .. '.t7', 'a checkpoint file')
 
 -- training options
-cmd:option('--maxEpoch', 500, 'maxumum epochs to train')
+cmd:option('--maxEpoch', 300, 'maxumum epochs to train')
 cmd:option('--learningRate', 1e-2, 'starting learning rate')
 cmd:option('--minLearningRate', 1e-7, 'minimum learning rate')
 cmd:option('--momentum', 0.9, 'patch size')
@@ -46,8 +46,8 @@ cmd:option('--seed', 123, 'patch size')
 cmd:option('--checkpointDir', rootDir .. "checkpoint/" .. modelId .. "/", 'checkpoint directory')
 cmd:option('--saveModelEvery', 10, 'save model every n epochs')
 cmd:option('--historyFilePrefix', rootDir .. modelId, 'prefix of the file to save the loss and accuracy for each iteration while training')
-cmd:option('--validateEvery', 100, 'run validation every n iterations')
-cmd:option('--trainAverageEvery', 50, 'average training metric every n iterations')
+cmd:option('--validateEvery', 12, 'run validation every n iterations')
+cmd:option('--trainAverageEvery', 5, 'average training metric every n iterations')
 
 local opt = cmd:parse(arg)
 
@@ -254,7 +254,7 @@ end
 
 local function trainWholeImg()
   --local trainIter = loader:iterator("train", {augment = true, classId = 2, highResLabel=opt.highRes})
-  local trainIter = loader:iterator("train", {addControl = opt.includeControl, augment = true, classId = opt.targetLabel})
+  local trainIter = loader:iterator("train", {addControl = opt.includeControl, augment = true, classId = opt.targetLabel, retina=opt.retina})
   for epoch = 1+checkpointEpoch, opt.maxEpoch+checkpointEpoch do
     local loss = nil
     for batchData in trainIter() do

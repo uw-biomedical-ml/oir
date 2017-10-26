@@ -17,21 +17,23 @@ local function plotFigure(opt, axisType)
   gnuplot.xlabel('iterations')
   if axisType then
     if axisType == 1 then
-      gnuplot.axis{0,'',0.02,0.35}  -- red {0,'',0.02,0.24}, yellow: {0,'',0.02,0.35}
+      gnuplot.axis{0,'',0,0.5}  -- red {0,'',0.02,0.24}, yellow: {0,'',0.02,0.35}
     elseif axisType == 2 then
-      gnuplot.axis{0,'',0,1}  -- red: {0,'',0,0.9}, yellow: {0,'',0,1}
+      gnuplot.axis{0,'',0.5,1}  -- red: {0,'',0,0.9}, yellow: {0,'',0,1}
     end
   end
   gnuplot.plotflush()
 end
+
+print("plotTrainingMetrics")
 
 local rootDir = "./plot/retina"
 paths.mkdir(rootDir)
 
 local opt = {}
 local modelId = "retina"
-local trainFileName = "./oir/" .. modelId .. "_train.txt"
-local valFileName = "./oir/" ..modelId .. "_val.txt"
+local trainFileName = "./" .. modelId .. "_train.txt"
+local valFileName = "./" ..modelId .. "_val.txt"
 
 opt.fileName = string.format("%s/%s_loss_val.png", rootDir, modelId)
 opt.title = "validate loss"

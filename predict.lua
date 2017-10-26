@@ -11,12 +11,13 @@ cmd:option('--imageFile', 'sample/raw.png', 'image file')
 cmd:option('--task', 3, '1(yellow)|2(red)|3(both)')
 cmd:option('--redModel', 'model/red.t7', 'trained model for red')
 cmd:option('--yellowModel', 'model/yellow.t7', 'trained model for yellow')
+cmd:option('--retinaModel', 'model/retina.t7')
 cmd:option('--outputdir', 'output', 'output directory')
-cmd:option('--learnRetina', true, 'whether to draw retina')
+cmd:option('--nnRetina', true, 'whether to draw retina')
+cmd:option('--kmeansRetina', false, 'whether to draw retina')
 cmd:option('--verbose', true)
 cmd:option('--gpu', 0, '-1 means using cpu, for i >= 0 means using gpu with id = i+1')
 cmd:option('--thumbnailSize', -1, 'thumbnail size')
-cmd:option('--ks', {2})
 cmd:option('--retinaModel', 'model/retina.t7')
 local opt = cmd:parse(arg)
 
@@ -45,8 +46,8 @@ function predict(opt)
 
   paths.mkdir(opt.outputdir)
 
-  local red = {name="red", targetLabel=2, modelFile=opt.redModel, dsize=512}
-  local yellow = {name="yellow", targetLabel=1, modelFile=opt.yellowModel, dsize=256}
+  local red = {name="NV", targetLabel=2, modelFile=opt.redModel, dsize=512}
+  local yellow = {name="VO", targetLabel=1, modelFile=opt.yellowModel, dsize=256}
   local retinaSize = 256
 
   local upPredict = torch.Tensor(img2D:size(1), img2D:size(2)):zero()
@@ -69,22 +70,26 @@ function predict(opt)
   end
 
   local function dopredict()
-    local retina = nil
-    if opt.learnRetina then
-      local dimg = image.scale(img2D, retinaSize, retinaSize)
-      retina = {}
-      for _, k in pairs(opt.ks) do
-        retina[k] = utils.learnByKmeansThreshold(dimg, {k=k, verbose=opt.verbose})
-        utils.drawImage(string.format("%s/%s_retina_k%d.png", opt.outputdir, basename, k), dimg:byte(), retina[k])
-      end
-      if opt.retinaModel then
-        local retina_output = inference(opt.retinaModel, retinaSize)
-        local _, retina_nn = retina_output:max(2)
-        retina_nn = retina_nn:squeeze():view(retinaSize, retinaSize) - 1
-        utils.drawImage(string.format("%s/%s_retina_nn.png", opt.outputdir, basename), dimg:byte(), retina_nn:byte())
-        retina['nn'] = retina_nn
-      end
-    end  
+    local pixelCnt = {retina={}}
+    local retina = {}
+    local dimg = image.scale(img2D, retinaSize, retinaSize)
+    if opt.nnRetina then
+      local retina_output = inference(opt.retinaModel, retinaSize)
+      local _, retinaLabel = retina_output:max(2)
+      retinaLabel = retinaLabel:squeeze():view(retinaSize, retinaSize) - 1
+      retina.nn = retinaLabel
+      utils.drawImage(string.format("%s/%s_retina_nn.png", opt.outputdir, basename), dimg:byte(), retinaLabel:byte())
+      local retina_upsampled = image.scale(retinaLabel:byte(), img2D:size(1), img2D:size(2), 'simple')
+      pixelCnt.retina.nn = retina_upsampled:sum()
+    end
+    if opt.kmeansRetina then
+      local retinaLabel = utils.learnByKmeansThreshold(dimg, {k=2, verbose=opt.verbose})
+      retina.kmeans = retinaLabel
+      utils.drawImage(string.format("%s/%s_retina_kmeans.png", opt.outputdir, basename), dimg:byte(), retinaLabel:byte())
+      local retina_upsampled = image.scale(retinaLabel:byte(), img2D:size(1), img2D:size(2), 'simple')
+      pixelCnt.retina.kmeans = retina_upsampled:sum()
+    end
+
     local tasks = {}
     if opt.task == 1 then
       table.insert(tasks, yellow)
@@ -101,14 +106,14 @@ function predict(opt)
       local output = inference(task.modelFile, task.dsize)
       local upsampled = utils.upsampleLabel(output:view(task.dsize,task.dsize,-1), {h=img2D:size(1), w=img2D:size(2)}) - 1
       upPredict:maskedFill(upsampled:eq(1), task.targetLabel)
-      ratio[i] = {}
-      if retina then
-        for rkey, retinaLabel in pairs(retina) do
-          local _, predict = output:max(2)
-          predict = predict - 1
-          ratio[i][rkey] = predict:sum()/(retinaLabel:sum()*(task.dsize/retinaSize)^2)
-          print(string.format("%s area / retina ratio = %.3f", task.name, ratio[i][rkey]))
-        end
+      local _, predict = output:max(2)
+      predict = predict - 1
+      pixelCnt[task.name] = predict:sum() * (img2D:size(1)/task.dsize)^2
+      ratio[task.name] = {}
+      for rkey, retinaLabel in pairs(retina) do
+        ratio[task.name][rkey] = predict:sum()/(retinaLabel:sum()*(task.dsize/retinaSize)^2)
+        print(string.format("%s area / retina(%s) ratio = %.3f", task.name, rkey, ratio[task.name][rkey]))
+        pixelCnt.retina[rkey] = retinaLabel:sum() * (img2D:size(1)/retinaSize)^2
       end
     end
     utils.drawImage(string.format("%s/%s_quantified.png", opt.outputdir, basename), img2D:byte(), upPredict)
@@ -118,7 +123,7 @@ function predict(opt)
       utils.drawImage(string.format("%s/%s_thumbnail.png", opt.outputdir, basename), tbImg2D:byte())
       utils.drawImage(string.format("%s/%s_quantified_thumbnail.png", opt.outputdir, basename), tbImg2D:byte(), tblabel) 
     end
-    return ratio
+    return ratio, pixelCnt
   end
   return dopredict()
 end

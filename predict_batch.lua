@@ -8,7 +8,8 @@ local opt = {task = 3,
              verbose = true,
              gpu = 0,
              thumbnailSize = 256,
-             ks={2},
+             nnRetina = true,
+             kmeansRetina = false,
              retinaModel = 'model/retina.t7'}
 
 local outputdirMap = {}
@@ -20,19 +21,22 @@ local function predictForDir(dir)
   paths.mkdir(opt.outputdir)
   local html = io.open(paths.concat(outputdir, 'index.html'), 'w')
   html:write('<table style="text-align:center;">')
-  html:write('<tr><td>file name</td><td>Input</td><td>Predict</td>')
-  for _, k in pairs(opt.ks) do
-    html:write(string.format("<td>Retina k=%d</td><td>VO ratio k=%d</td><td>NV ratio k=%d</td>", k,k,k))
+  html:write('<tr><td>file name</td><td>Input</td><td>Predict</td><td>VO pixels</td><td>NV pixels</td>')
+  if opt.kmeansRetina then
+    html:write('<td>Retina kmeans</td><td>Retina pixels</td><td>VO ratio</td><td>NV ratio</td>')
   end
-  if opt.retinaModel then
-    html:write('<td>Retina NN</td><td>VO ratio NN</td><td>NV ratio NN</td>')
+  if opt.nnRetina then
+    html:write('<td>Retina NN</td><td>Retina pixels</td><td>VO ratio</td><td>NV ratio</td>')
   end
   html:write('</tr>')
   
   local csvFile = io.open(string.format("%s/results.csv", outputdir), 'w')
-  csvFile:write("filename")
-  for _, k in pairs(opt.ks) do
-    csvFile:write(string.format(",voratio_k%d,nvratio_2%d", k, k))
+  csvFile:write("filename,VO pixels,NV pixels")
+  if opt.kmeansRetina then
+    csvFile:write(",Retina(kmeans) pixels,VO ratio,NV ratio")
+  end
+  if opt.nnRetina then
+    csvFile:write(",Retina(NN) pixels,VO ratio,NV ratio")
   end
   csvFile:write("\n")
 
@@ -42,7 +46,7 @@ local function predictForDir(dir)
       local filepath = string.format("%s/%s", dir, file)
       print(filepath)
       opt.imageFile = filepath
-      local ratio = predict(opt)
+      local ratio, pixels = predict(opt)
 
       --os.execute("cp \"" .. filepath .. "\" \"" .. opt.outputdir .. "\"")  
 
@@ -52,20 +56,25 @@ local function predictForDir(dir)
       html:write('<td>' .. basename .. '</td>')
       html:write(string.format('<td><img src="./image/%s_thumbnail.png"/></td>', basename))
       html:write(string.format('<td><img src="./image/%s_quantified_thumbnail.png"/></td>', basename))
+      html:write('<td>' .. pixels.VO .. '</td>')
+      html:write('<td>' .. pixels.NV .. '</td>')
       csvFile:write(file)
-      for _, k in pairs(opt.ks) do
-        local voratio, nvratio = string.format("%.3f", ratio[1][k]), string.format("%.3f", ratio[2][k])
-        html:write(string.format('<td><img src="./image/%s_retina_k%d.png"/></td>', basename, k))
+      csvFile:write(string.format(",%d,%d", pixels.VO, pixels.NV))
+      if opt.kmeansRetina then
+        local voratio, nvratio = string.format("%.3f", ratio.VO.kmeans), string.format("%.3f", ratio.NV.kmeans)
+        html:write(string.format('<td><img src="./image/%s_retina_kmeans.png"/></td>', basename))
+        html:write('<td>' .. pixels.retina.kmeans .. '</td>')
         html:write('<td>' .. voratio .. '</td>')
         html:write('<td>' .. nvratio .. '</td>')
-        csvFile:write(string.format(",%s,%s", voratio, nvratio))
+        csvFile:write(string.format(",%d,%s,%s", pixels.retina.kmeans, voratio, nvratio))
       end
-      if opt.retinaModel then
-        local voratio, nvratio = string.format("%.3f", ratio[1].nn), string.format("%.3f", ratio[2].nn)
+      if opt.nnRetina then
+        local voratio, nvratio = string.format("%.3f", ratio.NV.nn), string.format("%.3f", ratio.NV.nn)
         html:write(string.format('<td><img src="./image/%s_retina_nn.png"/></td>', basename))
+        html:write('<td>' .. pixels.retina.nn .. '</td>')
         html:write('<td>' .. voratio .. '</td>')
         html:write('<td>' .. nvratio .. '</td>')
-        csvFile:write(string.format(",%s,%s", voratio, nvratio))
+        csvFile:write(string.format(",%d,%s,%s", pixels.retina.nn, voratio, nvratio))
       end
       html:write('</tr>')
       csvFile:write("\n")
@@ -94,6 +103,6 @@ function predictRecursive(dir)
   end
 end
 
-local dir = "/data/oir/data/OIR quantification for Felicitas/IfnG P17 inj P14/20170206"
+local dir = "/data/oir/data/OIR quantification for Felicitas/IfnG P17 inj P14/20170206" --"/data/oir/data/OIR Quantification for Kyle"
 predictRecursive(dir)
 torch.save("outputdirMapping.t7", outputdirMap)

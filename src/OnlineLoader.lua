@@ -38,7 +38,7 @@ local function varyContrast(input, scale)
 end
 
 local function brightenBg(input, label, centroidsLog)
-  local pixel = math.exp(torch.uniform((cetroidsLog[2]+centroidsLog[1])/2, centroidsLog[2]))
+  local pixel = math.exp(torch.uniform((centroidsLog[2]+centroidsLog[1])/2, centroidsLog[2]))
   input:maskedFill(label:eq(0), pixel)
   return input
 end
@@ -203,7 +203,7 @@ function Loader:iterator(split, opt)
               if opt.retina then
                 transformOpt.centroidsLog = dataSet[idx].centroidsLog
               end
-              local transformed = transform(sample, self.var, opt)
+              local transformed = transform(sample, self.var, transformOpt)
               sample.input:copy(transformed.input)
               sample.target:copy(transformed.target)
             end

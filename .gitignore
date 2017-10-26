@@ -11,6 +11,5 @@ all-exp-code/
 output/
 backup/
 tmp/
-*.t7
 retina/
 *.png
