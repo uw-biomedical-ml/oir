@@ -22,6 +22,7 @@ cmd:option('--retinaModel', 'model/retina.t7')
 local opt = cmd:parse(arg)
 
 function predict(opt)
+  timer = torch.Timer()
   local img2D = nil
   local supportFormat = {{png=1, PNG=2, jpg=3, jpeg=4, JPG=5, JPEG=6}, {tif=1, tiff=2}}
   local suffix = string.match(opt.imageFile, ".*%.(.*)")
@@ -125,7 +126,9 @@ function predict(opt)
     end
     return ratio, pixelCnt
   end
-  return dopredict()
+  local ratio, pixelCnt = dopredict()
+  print(string.format('Time elapsed: %f seconds', timer:time().real)) 
+  return ratio, pixelCnt
 end
 
 predict(opt)
