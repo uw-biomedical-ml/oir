@@ -1,8 +1,17 @@
 require 'image'
 require 'gnuplot'
-local mlutils = require 'src/mlutils'
+local mlutils = require 'mlutils'
+local cjson = require 'cjson'
 
 local utils = {}
+
+function utils.write_json(path, data)
+  --cjson.encode_sparse_array(true, 2, 10)
+  local text = cjson.encode(data)
+  local file = io.open(path, 'w')
+  file:write(text)
+  file:close()
+end
 
 function utils.varyContrast(input, scale)
   input = input:float()
