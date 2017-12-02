@@ -3,7 +3,7 @@ require 'nn'
 require 'nngraph'
 require 'image'
 
-local rootdir = "/root/oir/"
+local rootdir = "./"
 package.path = package.path .. ";" .. rootdir .. "src/?.lua"
 
 local utils = require 'utils'
