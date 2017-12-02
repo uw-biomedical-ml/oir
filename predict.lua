@@ -97,10 +97,6 @@ function predict(opt)
   end
 
   local function dopredict()
-    if unexpected_condition then 
-      print("******* unexpexcted condition")
-      error() 
-    end
     local pixelCnt = {retina={}}
     local retina = {}
     local dimg = image.scale(img2D, retinaSize, retinaSize)
@@ -109,18 +105,12 @@ function predict(opt)
       local _, retinaLabel = retina_output:max(2)
       retinaLabel = retinaLabel:squeeze():view(retinaSize, retinaSize) - 1
       retina.nn = retinaLabel
-      --utils.drawImage(string.format("%s/%s_retina.done.png", opt.outputdir, basename), dimg:byte(), retinaLabel:byte())
       utils.drawImage(string.format("%s/retina.png", opt.outputdir), dimg:byte(), retinaLabel:byte())
-      --local retina_upsampled = image.scale(retinaLabel:byte(), img2D:size(1), img2D:size(2), 'simple')
-      --pixelCnt.retina.nn = retina_upsampled:sum()
     end
     if opt.kmeansRetina > 0 then
       local retinaLabel = utils.learnByKmeansThreshold(dimg, {k=2, verbose=opt.verbose})
       retina.kmeans = retinaLabel
-      --utils.drawImage(string.format("%s/%s_retina.done.png", opt.outputdir, basename), dimg:byte(), retinaLabel:byte())
       utils.drawImage(string.format("%s/retina.png", opt.outputdir), dimg:byte(), retinaLabel:byte())
-      --local retina_upsampled = image.scale(retinaLabel:byte(), img2D:size(1), img2D:size(2), 'simple')
-      --pixelCnt.retina.kmeans = retina_upsampled:sum()
     end
 
     local tasks = {}
