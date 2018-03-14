@@ -35,6 +35,7 @@ luarocks install graphicsmagick
 
 ## Run segmentation on new image
 
+### Single image
 ```bash
 th predict.lua --imageFile 'image/raw.png' --outputdir 'output'
 ```
@@ -44,3 +45,9 @@ Here is an example of the input and output
   <img src='sample/raw.png' height='350px'>
   <img src='sample/predict.png' height="350px">
 </div>
+
+### Batch images
+```bash
+th predict_batch.lua --imageFolder 'sample/batch' --outputdir 'output'
+```
+The program will process all the images in the given "imageFolder", including all the subfolders. The folder structure will be copied to the given "outputdir", and the segmenation results will be saved in a "result" folder in each corressponding directories.
